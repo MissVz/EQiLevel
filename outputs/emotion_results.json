@@ -1,0 +1,10 @@
+{
+  "timestamp": "2025-07-28T10:59:47.523876",
+  "input_file": "test_audio.m4a",
+  "transcript": " Hi, I'm trying my best to understand this lesson, but I feel a little frustrated right now. Can you slow down and explain that last part again? Maybe I'm just tired, but I don't want to give up. I really want to get this right.",
+  "emotion_analysis": {
+    "emotion": "frustrated",
+    "confidence": 0.85,
+    "explanation": "The student explicitly mentions feeling frustrated and requests a slower explanation, indicating a struggle with understanding. Despite this, they express determination and a desire to succeed, suggesting a mix of frustration and perseverance."
+  }
+}
