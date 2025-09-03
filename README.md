@@ -78,7 +78,7 @@ POST /session → full loop (analyze → MCP → RL policy → tutor → log)
 GET /metrics  
 GET /metrics?session_id=s1
 
-**Reports:**
+**Reports:**  
 ````JSON
 {
   "turns_total": 10,
