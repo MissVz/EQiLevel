@@ -1,0 +1,36 @@
+# app/api/v1/health_router.py
+from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
+import os
+
+from app.services import storage  # expects storage.db_health() -> (ok: bool, err: Optional[str])
+
+router = APIRouter(prefix="/api/v1", tags=["health"])
+
+@router.get("/health")
+def health():
+    return {"status": "ok"}
+
+@router.get("/health/full")
+def health_full():
+    # OpenAI key check
+    key_ok = bool(os.getenv("OPENAI_API_KEY"))
+
+    # DB health
+    db_ok, db_err = storage.db_health()
+
+    overall_ok = key_ok and db_ok
+    payload = {
+        "status": "ok" if overall_ok else "degraded",
+        "components": {
+            "openai_key": "present" if key_ok else "missing",
+            "database": "up" if db_ok else "down",
+        },
+        "errors": {},
+    }
+
+    if not db_ok and db_err:
+        payload["errors"]["database"] = db_err
+
+    code = status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(content=payload, status_code=code)

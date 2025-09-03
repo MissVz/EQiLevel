@@ -1,10 +1,12 @@
 # app/main.py
 import os
+from app.api.v1.admin_router import router as admin_router
+from app.api.v1.health_router import router as health_router
 from app.db.schema import Turn
 from app.models import TurnRequest, TurnContext, TutorReply, MCP
 from app.services import emotion, mcp, policy, tutor, reward, storage
 from app.services.metrics import compute_metrics
-from app.services.storage import SessionLocal
+from app.services.storage import SessionLocal, db_health
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,10 +14,9 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 load_dotenv()
-
-print(f"[startup] OPENAI_API_KEY loaded?: {'yes' if os.getenv('OPENAI_API_KEY') else 'no'}")
-
 app = FastAPI(title="EQiLevel API")
+
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,37 +28,18 @@ app.add_middleware(
 def on_startup():
     try:
         storage.init_db()
+        print(f"[startup] OPENAI_API_KEY loaded?: {'yes' if os.getenv('OPENAI_API_KEY') else 'no'}")
         print("[startup] Database initialized successfully.")
     except Exception as e:
         print(f"[startup] Database initialization FAILED: {e}")
 
+# Include routers
+app.include_router(health_router)
+
 # ================================= GETs =============================
-@app.get("/health")
-def health():
-    return {"status":"ok"}
-
-@app.get("/health/full")
-def health_full():
-    # OpenAI key check
-    key_ok = bool(os.getenv("OPENAI_API_KEY"))
-
-    # DB check
-    db_ok, db_err = storage.db_health()
-
-    overall_ok = key_ok and db_ok
-    payload = {
-        "status": "ok" if overall_ok else "degraded",
-        "components": {
-            "openai_key": "present" if key_ok else "missing",
-            "database":  "up"      if db_ok  else "down"
-        },
-        "errors": {}
-    }
-    if not db_ok:
-        payload["errors"]["database"] = db_err
-
-    code = status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE
-    return JSONResponse(content=payload, status_code=code)
+@app.get("/health")  # (optional) keep a super-light liveness root if you want backward compatibility
+def health_root():
+    return {"status": "ok"}
 
 @app.get("/metrics")
 def metrics(session_id: Optional[str] = None):
