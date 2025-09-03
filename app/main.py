@@ -1,11 +1,15 @@
 # app/main.py
 import os
+from app.db.schema import Turn
+from app.models import TurnRequest, TurnContext, TutorReply, MCP
+from app.services import emotion, mcp, policy, tutor, reward, storage
+from app.services.metrics import compute_metrics
+from app.services.storage import SessionLocal
+from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from app.models import TurnRequest, TurnContext, TutorReply, MCP
-from app.services import emotion, mcp, policy, tutor, reward, storage
-from dotenv import load_dotenv
+from typing import Optional
 
 load_dotenv()
 
@@ -19,10 +23,6 @@ app.add_middleware(
     allow_methods=["*"], allow_headers=["*"],
 )
 
-@app.post("/echo")
-def echo(req: TurnRequest):
-    return {"ok": True, "user_text": req.user_text, "session_id": req.session_id}
-
 @app.on_event("startup")
 def on_startup():
     try:
@@ -31,6 +31,7 @@ def on_startup():
     except Exception as e:
         print(f"[startup] Database initialization FAILED: {e}")
 
+# ================================= GETs =============================
 @app.get("/health")
 def health():
     return {"status":"ok"}
@@ -58,11 +59,26 @@ def health_full():
     code = status.HTTP_200_OK if overall_ok else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(content=payload, status_code=code)
 
+@app.get("/metrics")
+def metrics(session_id: Optional[str] = None):
+    """
+    Telemetry dashboard; optional session_id narrows to one learner/session.
+    Example:
+      /metrics
+      /metrics?session_id=s1
+    """
+    return compute_metrics(session_id)
+
+# ================================= POSTs =============================
 @app.post("/analyze")
 def analyze(req: TurnRequest):
     em = emotion.classify(req.user_text)                  # -> EmotionSignals
     perf = emotion.estimate_perf(req.user_text)           # optional
     return {"emotion": em.model_dump(), "performance": perf.model_dump()}
+
+@app.post("/echo")
+def echo(req: TurnRequest):
+    return {"ok": True, "user_text": req.user_text, "session_id": req.session_id}
 
 @app.post("/mcp/build", response_model=MCP)
 def build_mcp(ctx: TurnContext):
@@ -88,9 +104,11 @@ def session_turn(req: TurnRequest):
     em = emotion.classify(req.user_text)
     perf = emotion.estimate_perf(req.user_text)
     # 2) build MCP
+    # compute reward BEFORE policy.update (baseline for this turn)
+    r = reward.compute(em, perf)   # <-- returns a float
     mcp_state = mcp.build(em, perf, req.user_text)
     # 3) policy update
-    mcp_updated = policy.update(mcp_state, reward.compute(em, perf))
+    mcp_updated = policy.update(mcp_state, r)
     # 4) tutor reply
     try:
         text = tutor.generate(req.user_text, mcp_updated)
@@ -99,9 +117,9 @@ def session_turn(req: TurnRequest):
     except Exception as gen_err:
         print(f"[session] Tutor error: {gen_err}")
         text = "[Tutor] Quick hint: try a smaller step — we’ll fix generation next."
-    # 5) persist safely
+    # 5) persist safely EVERYTHING including reward
     try:
-        storage.log_turn_full(req, em, perf, mcp_updated, text)
+        storage.log_turn_full(req, em, perf, mcp_updated, text, reward=float(r))
     except Exception as log_err:
         print(f"[storage] Logging failed: {log_err}")
-    return TutorReply(text=text, mcp=mcp_updated)
+    return TutorReply(text=text, mcp=mcp_updated, reward=float(r))
