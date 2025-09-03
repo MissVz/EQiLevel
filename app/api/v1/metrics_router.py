@@ -43,3 +43,4 @@ def get_metrics(
 
     # Pass through to metrics service
     return compute_metrics(session_id=session_id, since_minutes=since_minutes)
+

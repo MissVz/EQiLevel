@@ -42,7 +42,48 @@ def get_turns(
     )
     return [_map_turn(r) for r in rows]
 
-@router.get("/summary")
+@router.get(
+    "/summary",
+    responses={
+        200: {
+            "description": "Admin summary: per-session totals and last turn snapshot.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "sessions": [
+                            {
+                                "session_id": "s3",
+                                "turns_total": 2,
+                                "last_turn_utc": "2025-09-03T19:23:29Z",
+                                "last_emotion": "frustrated",
+                                "last_reward": 0.45,
+                                "last_difficulty": "down",
+                                "last_tone": "warm",
+                                "turns_in_window": 2,
+                                "avg_reward_window": 0.35
+                            },
+                            {
+                                "session_id": "s1",
+                                "turns_total": 10,
+                                "last_turn_utc": "2025-09-03T05:41:00Z",
+                                "last_emotion": "calm",
+                                "last_reward": 0.05,
+                                "last_difficulty": "hold",
+                                "last_tone": "neutral",
+                                "turns_in_window": 0,
+                                "avg_reward_window": 0.0
+                            }
+                        ],
+                        "filters": {
+                            "since_hours": 24,
+                            "window_start_utc": "2025-09-02T20:51:30Z"
+                        }
+                    }
+                }
+            },
+        }
+    },
+)
 def get_summary(
     since_minutes: Optional[int] = Query(None, ge=1, description="Window size in minutes"),
     since_hours: Optional[int] = Query(None, ge=1, description="Window size in hours"),
