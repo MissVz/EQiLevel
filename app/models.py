@@ -33,6 +33,7 @@ class MCP(BaseModel):
 class TurnRequest(BaseModel):
     user_text: str
     session_id: Optional[str] = None
+    correct: Optional[bool] = None
 
 class TurnContext(BaseModel):
     transcript: str
