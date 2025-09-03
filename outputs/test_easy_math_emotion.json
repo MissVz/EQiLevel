@@ -1,0 +1,10 @@
+{
+  "timestamp": "2025-07-28T14:13:36.766337",
+  "input_file": "test_easy_math.m4a",
+  "transcript": " Yay, I see that 1 plus 1 is 2. Like having 1 cookie and then 1 more cookie makes 2 cookies. And when we have 2 apples and add 3 more apples, we get 5 apples. It's like lining them up and counting 1, 2, 3, 4, 5. That's so simple and fun. I feel ready to try 3 plus 4 on my own. Let's count together.",
+  "emotion_analysis": {
+    "emotion": "joyful",
+    "confidence": 0.95,
+    "explanation": "The student expresses excitement and enthusiasm about understanding basic addition. They use positive language such as 'Yay', 'simple', and 'fun', indicating a joyful and confident emotional tone. The student also expresses readiness to tackle more problems, suggesting a sense of accomplishment and eagerness to learn more."
+  }
+}

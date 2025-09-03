@@ -47,6 +47,11 @@ def transcribe_audio(audio_path, model_size="base", output_dir="transcripts"):
 
     print(f"✅ Transcript saved to: {output_path}")
 
+    # Print raw transcript
+    transcript_text = result["text"]
+    print("📝 Transcript:")
+    print(transcript_text)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EQiLevel GPU Whisper Transcriber")
     parser.add_argument("audio_path", help="Path to the input .wav or .mp3 file")

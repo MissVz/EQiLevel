@@ -77,11 +77,24 @@ class QLearningAgent:
         """
         Save the Q-table to disk and print confirmation.
         """
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w") as f:
-            json.dump(self.q_table, f, indent=2)
-        print(f"[QLAgent] Q-table saved to: {path}")
-    
+        try:
+            # Ensure parent directory is there (if any)
+            parent = os.path.dirname(path) or "."
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                json.dump(self.q_table, f, indent=2)
+            print(f"[QLAgent] Q-table saved to: {path}")
+        except Exception as e:
+            print(f"⚠ Save error: {e} — retrying with fallback path.")
+            # Fallback to current directory
+            fallback = "q_table.json"
+            try:
+                with open(fallback, "w") as f:
+                    json.dump(self.q_table, f)
+                print(f"[QLAgent] Q-table saved to fallback: {fallback}")
+            except Exception as e2:
+                print(f"❌ Final save failure: {e2}")
+                    
     @classmethod
     def load(cls, path: str, **kwargs) -> 'QLearningAgent':
         """
