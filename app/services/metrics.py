@@ -1,11 +1,11 @@
 # app/services/metrics.py
 from __future__ import annotations
-
-from typing import Optional, Dict, Any
-from sqlalchemy import select, func, or_
 from app.db.schema import Turn
 from app.services.storage import SessionLocal
-
+from datetime import datetime, timedelta
+from sqlalchemy import select, func, or_
+from sqlalchemy.sql import text
+from typing import Optional, Dict, Any
 
 def _counts_by_emotion(db, session_id):
     from sqlalchemy import case
@@ -30,7 +30,8 @@ def _action_distribution(db, session_id):
         "next_step":  {n: db.scalar(S("next_step", n)) or 0 for n in ["example","prompt","explain","quiz","review"]},
     }
 
-def compute_metrics(session_id: Optional[str] = None) -> Dict[str, Any]:
+def compute_metrics(session_id: Optional[str] = None,
+                    since_minutes: Optional[int] = None) -> Dict[str, Any]:
     """
     Compute aggregate telemetry for EQiLevel.
 
@@ -41,110 +42,108 @@ def compute_metrics(session_id: Optional[str] = None) -> Dict[str, Any]:
       - tone_alignment_rate: heuristic tone↔emotion mapping (see below)
       - last_10_reward_avg
     """
-    def _with_session_filter(stmt):
+    window_start = None
+    cutoff_dt = None
+
+    if since_minutes and since_minutes > 0:
+        cutoff_dt = datetime.utcnow() - timedelta(minutes=since_minutes)
+
+    def _with_filters(stmt):
         if session_id:
-            return stmt.where(Turn.session_id == session_id)
+            stmt = stmt.where(Turn.session_id == session_id)
+        if cutoff_dt is not None:
+            stmt = stmt.where(Turn.created_at >= cutoff_dt)
         return stmt
 
     with SessionLocal() as db:
         # ---- Totals ----
-        turns_total = db.scalar(_with_session_filter(select(func.count(Turn.id)))) or 0
+        turns_total = db.scalar(_with_filters(select(func.count(Turn.id)))) or 0
 
         # ---- Average reward ----
-        avg_reward = db.scalar(_with_session_filter(select(func.avg(Turn.reward)))) or 0.0
+        avg_reward = db.scalar(_with_filters(select(func.avg(Turn.reward)))) or 0.0
 
         # ---- Frustration adaptation rate ----
-        frustrated_total = db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id)).where(
-                    Turn.emotion["label"].as_string() == "frustrated"
-                )
-            )
-        ) or 0
+        frustrated_total = db.scalar(_with_filters(
+            select(func.count(Turn.id)).where(Turn.emotion["label"].as_string()=="frustrated")
+        )) or 0
+        adapted_frustrated = db.scalar(_with_filters(
+            select(func.count(Turn.id))
+            .where(Turn.emotion["label"].as_string()=="frustrated")
+            .where(or_(Turn.mcp["pacing"].as_string()=="slow",
+                       Turn.mcp["difficulty"].as_string()=="down"))
+        )) or 0
+        frustration_adaptation_rate = (adapted_frustrated / frustrated_total) if frustrated_total else 0.0
 
-        adapted_when_frustrated = db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id))
-                .where(Turn.emotion["label"].as_string() == "frustrated")
-                .where(
-                    or_(
-                        Turn.mcp["pacing"].as_string() == "slow",
-                        Turn.mcp["difficulty"].as_string() == "down",
-                    )
-                )
-            )
-        ) or 0
-
-        frustration_adaptation_rate = (
-            adapted_when_frustrated / frustrated_total if frustrated_total else 0.0
-        )
-
-        # ---- Tone alignment (heuristic proxy) ----
-        # Targets:
-        #  frustrated -> tone in {"warm","encouraging"}
-        #  engaged   -> tone == "encouraging"
-        #  calm      -> tone == "neutral"
-        #  bored     -> tone == "concise"
+        # tone alignment (heuristic proxy)
         tone_aligned = 0
-
-        tone_aligned += db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id))
-                .where(Turn.emotion["label"].as_string() == "frustrated")
-                .where(Turn.mcp["tone"].as_string().in_(["warm", "encouraging"]))
+        tone_aligned += db.scalar(_with_filters(
+            select(func.count(Turn.id))
+            .where(Turn.emotion["label"].as_string()=="frustrated")
+            .where(Turn.mcp["tone"].as_string().in_(["warm","encouraging"]))
+        )) or 0
+        tone_aligned += db.scalar(_with_filters(
+            select(func.count(Turn.id))
+            .where(Turn.emotion["label"].as_string()=="engaged")
+            .where(Turn.mcp["tone"].as_string()=="encouraging")
+        )) or 0
+        tone_aligned += db.scalar(_with_filters(
+            select(func.count(Turn.id))
+            .where(Turn.emotion["label"].as_string()=="calm")
+            .where(Turn.mcp["tone"].as_string()=="neutral")
+        )) or 0
+        tone_aligned += db.scalar(_with_filters(
+            select(func.count(Turn.id))
+            .where(Turn.emotion["label"].as_string()=="bored")
+            .where(Turn.mcp["tone"].as_string()=="concise")
+        )) or 0
+        tone_labeled_total = db.scalar(_with_filters(
+            select(func.count(Turn.id)).where(
+                Turn.emotion["label"].as_string().in_(["frustrated","engaged","calm","bored"])
             )
-        ) or 0
+        )) or 0
+        tone_alignment_rate = (tone_aligned / tone_labeled_total) if tone_labeled_total else 0.0
 
-        tone_aligned += db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id))
-                .where(Turn.emotion["label"].as_string() == "engaged")
-                .where(Turn.mcp["tone"].as_string() == "encouraging")
-            )
-        ) or 0
+        # Last 10 reward Moving Average (MA) (ordered by id)
+        last_10_reward_avg = db.scalar(_with_filters(
+            select(func.avg(Turn.reward)).order_by(Turn.id.desc()).limit(10)
+        )) or 0.0
 
-        tone_aligned += db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id))
-                .where(Turn.emotion["label"].as_string() == "calm")
-                .where(Turn.mcp["tone"].as_string() == "neutral")
-            )
-        ) or 0
+        # optional breakdowns
+        def _count_where(key, value):
+            return db.scalar(_with_filters(
+                select(func.count(Turn.id)).where(Turn.mcp[key].as_string()==value)
+            )) or 0
 
-        tone_aligned += db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id))
-                .where(Turn.emotion["label"].as_string() == "bored")
-                .where(Turn.mcp["tone"].as_string() == "concise")
-            )
-        ) or 0
+        by_emotion = {
+            "frustrated": db.scalar(_with_filters(select(func.count(Turn.id))
+                           .where(Turn.emotion["label"].as_string()=="frustrated"))) or 0,
+            "engaged":    db.scalar(_with_filters(select(func.count(Turn.id))
+                           .where(Turn.emotion["label"].as_string()=="engaged"))) or 0,
+            "calm":       db.scalar(_with_filters(select(func.count(Turn.id))
+                           .where(Turn.emotion["label"].as_string()=="calm"))) or 0,
+            "bored":      db.scalar(_with_filters(select(func.count(Turn.id))
+                           .where(Turn.emotion["label"].as_string()=="bored"))) or 0,
+        }
+        action_distribution = {
+            "tone":       {t: _count_where("tone", t) for t in ["warm","encouraging","neutral","concise"]},
+            "pacing":     {p: _count_where("pacing", p) for p in ["slow","medium","fast"]},
+            "difficulty": {d: _count_where("difficulty", d) for d in ["down","hold","up"]},
+            "next_step":  {n: _count_where("next_step", n) for n in ["example","prompt","explain","quiz","review"]},
+        }
 
-        tone_labeled_total = db.scalar(
-            _with_session_filter(
-                select(func.count(Turn.id)).where(
-                    Turn.emotion["label"].as_string().in_(
-                        ["frustrated", "engaged", "calm", "bored"]
-                    )
-                )
-            )
-        ) or 0
-
-        tone_alignment_rate = tone_aligned / tone_labeled_total if tone_labeled_total else 0.0
-
-        # ---- Last 10 reward moving average ----
-        last_10_reward_avg = db.scalar(
-            _with_session_filter(
-                select(func.avg(Turn.reward)).order_by(Turn.id.desc()).limit(10)
-            )
-        ) or 0.0
-
+        filters = {}
+        if session_id: filters["session_id"] = session_id
+        if since_minutes:
+            filters["since_minutes"] = since_minutes
+            filters["window_start_utc"] = cutoff_dt.isoformat() + "Z"
+        
         return {
             "turns_total": turns_total,
             "avg_reward": round(float(avg_reward), 4),
             "frustration_adaptation_rate": round(float(frustration_adaptation_rate), 4),
             "tone_alignment_rate": round(float(tone_alignment_rate), 4),
             "last_10_reward_avg": round(float(last_10_reward_avg), 4),
-            "filters": {"session_id": session_id} if session_id else {},
-            "by_emotion": _counts_by_emotion(db, session_id),
-            "action_distribution": _action_distribution(db, session_id),
+            "by_emotion": by_emotion,
+            "action_distribution": action_distribution,
+            "filters": filters,
         }

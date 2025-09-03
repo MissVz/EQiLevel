@@ -2,6 +2,7 @@
 import os
 from app.api.v1.admin_router import router as admin_router
 from app.api.v1.health_router import router as health_router
+from app.api.v1.metrics_router import router as metrics_router
 from app.db.schema import Turn
 from app.models import TurnRequest, TurnContext, TutorReply, MCP
 from app.services import emotion, mcp, policy, tutor, reward, storage
@@ -34,8 +35,9 @@ def on_startup():
         print(f"[startup] Database initialization FAILED: {e}")
 
 # Include routers
+app.include_router(admin_router)
 app.include_router(health_router)
-
+app.include_router(metrics_router)
 # ================================= GETs =============================
 @app.get("/health")  # (optional) keep a super-light liveness root if you want backward compatibility
 def health_root():
