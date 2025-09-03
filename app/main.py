@@ -81,7 +81,33 @@ def tutor_reply(ctx: TurnContext):
     storage.log_turn(ctx, text, r)
     return TutorReply(text=text, mcp=ctx.mcp, reward=r)
 
-@app.post("/session", response_model=TutorReply)
+@app.post(
+    "/session",
+    responses={
+        200: {
+            "description": "Tutor reply with updated MCP and reward signal.",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "text": "Let's try a simpler example: 1/2 + 1/3 = 5/6. Want to give it a go?",
+                        "mcp": {
+                            "emotion": {"label": "frustrated", "sentiment": -0.4},
+                            "performance": {"correct": None, "attempts": None, "time_to_solve_sec": None, "accuracy_pct": None},
+                            "learning_style": {"visual": 0.0, "auditory": 0.0, "reading_writing": 0.0, "kinesthetic": 0.0},
+                            "tone": "warm",
+                            "pacing": "slow",
+                            "difficulty": "down",
+                            "style": "mixed",
+                            "next_step": "example"
+                        },
+                        "reward": 0.45
+                    }
+                }
+            },
+        }
+    },
+    status_code=status.HTTP_200_OK,
+)
 def session_turn(req: TurnRequest):
     # 1) analyze
     em = emotion.classify(req.user_text)
