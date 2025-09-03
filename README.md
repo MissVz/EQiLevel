@@ -91,6 +91,8 @@ GET /metrics?session_id=s1
 }
 ```
 
+---
+
 **Admin**  
 GET /api/v1/admin/turns?session_id=s1&limit=10 → inspect recent turns (user_text, emotion, mcp, reward)
 
