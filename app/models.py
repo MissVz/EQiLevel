@@ -31,8 +31,8 @@ class MCP(BaseModel):
     next_step: Literal["explain","example","prompt","quiz","review"]
 
 class TurnRequest(BaseModel):
-    user_text: str
-    session_id: Optional[str] = None
+    user_text: str = Field(..., example="I keep messing up fractions and feel stuck.")
+    session_id: Optional[str] = Field(None, example="s1")
     correct: Optional[bool] = None
 
 class TurnContext(BaseModel):
