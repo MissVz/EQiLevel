@@ -8,6 +8,7 @@ from app.models import TurnRequest, TurnContext, TutorReply, MCP
 from app.services import emotion, mcp, policy, tutor, reward, storage
 from app.services.metrics import compute_metrics
 from app.services.storage import SessionLocal, db_health
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,8 +16,15 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 load_dotenv()
-app = FastAPI(title="EQiLevel API")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    storage.init_db()
+    print(f"[startup] OPENAI_API_KEY loaded?: {'yes' if os.getenv('OPENAI_API_KEY') else 'no'}")
+    print("[startup] Database initialized successfully.")
+    yield
+
+app = FastAPI(title="EQiLevel API", lifespan=lifespan)
 
 
 app.add_middleware(
@@ -24,15 +32,6 @@ app.add_middleware(
     allow_origins=["*"], allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
-
-@app.on_event("startup")
-def on_startup():
-    try:
-        storage.init_db()
-        print(f"[startup] OPENAI_API_KEY loaded?: {'yes' if os.getenv('OPENAI_API_KEY') else 'no'}")
-        print("[startup] Database initialized successfully.")
-    except Exception as e:
-        print(f"[startup] Database initialization FAILED: {e}")
 
 # Include routers
 app.include_router(admin_router)
