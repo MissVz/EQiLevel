@@ -25,23 +25,29 @@ def _map_turn(t: Turn) -> AdminTurn:
     )
 
 @router.get("/turns", response_model=List[AdminTurn])
-def get_admin_turns(
+def get_turns(
     session_id: Optional[str] = Query(None),
+    since_minutes: Optional[int] = Query(None, ge=1),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    since_minutes: Optional[int] = Query(None, ge=1),
     order: str = Query("desc", pattern="^(?i)(asc|desc)$"),
     _=Depends(require_admin),
 ):
-    rows = fetch_turns(session_id, limit, offset, since_minutes, order)
+    rows = fetch_turns(
+        session_id=session_id,
+        limit=limit,
+        offset=offset,
+        since_minutes=since_minutes,
+        order=order,
+    )
     return [_map_turn(r) for r in rows]
 
-@router.get("/summary", tags=["admin"])
-def get_admin_summary(
+@router.get("/summary")
+def get_summary(
     since_minutes: Optional[int] = Query(None, ge=1, description="Window size in minutes"),
-    since_hours:   Optional[int] = Query(None, ge=1, description="Window size in hours")
+    since_hours: Optional[int] = Query(None, ge=1, description="Window size in hours"),
+    _=Depends(require_admin),
 ):
-    # prefer minutes; map hours → minutes if only hours provided
-    if since_minutes is None and since_hours is not None:
+    if since_minutes is None and since_hours:
         since_minutes = since_hours * 60
     return admin_summary(since_minutes=since_minutes)
