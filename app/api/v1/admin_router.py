@@ -2,9 +2,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.schemas.admin import AdminTurn
+from app.services.admin_summary import admin_summary
 from app.services.storage import fetch_turns
 from app.services.security import require_admin
 from app.db.schema import Turn
+from fastapi import Query
+from typing import Optional
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -32,3 +35,13 @@ def get_admin_turns(
 ):
     rows = fetch_turns(session_id, limit, offset, since_minutes, order)
     return [_map_turn(r) for r in rows]
+
+@router.get("/summary", tags=["admin"])
+def get_admin_summary(
+    since_minutes: Optional[int] = Query(None, ge=1, description="Window size in minutes"),
+    since_hours:   Optional[int] = Query(None, ge=1, description="Window size in hours")
+):
+    # prefer minutes; map hours → minutes if only hours provided
+    if since_minutes is None and since_hours is not None:
+        since_minutes = since_hours * 60
+    return admin_summary(since_minutes=since_minutes)
