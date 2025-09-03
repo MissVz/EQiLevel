@@ -79,7 +79,7 @@ GET /metrics
 GET /metrics?session_id=s1
 
 **Reports:**  
-````JSON
+````json
 {
   "turns_total": 10,
   "avg_reward": 0.21,
