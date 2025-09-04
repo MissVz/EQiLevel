@@ -26,11 +26,36 @@ def _map_turn(t: Turn) -> AdminTurn:
 
 @router.get("/turns", response_model=List[AdminTurn])
 def get_turns(
-    session_id: Optional[str] = Query(None),
-    since_minutes: Optional[int] = Query(None, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-    order: str = Query("desc", pattern="^(?i)(asc|desc)$"),
+    session_id: Optional[str] = Query(
+        None,
+        example="s1",
+        description="Filter by session ID"
+    ),
+    since_minutes: Optional[int] = Query(
+        None,
+        ge=1,
+        example=120,
+        description="Only include turns from the last N minutes"
+    ),
+    limit: int = Query(
+        50,
+        ge=1,
+        le=200,
+        example=10,
+        description="Maximum number of results to return"
+    ),
+    offset: int = Query(
+        0,
+        ge=0,
+        example=0,
+        description="Number of results to skip (for paging)"
+    ),
+    order: str = Query(
+        "desc",
+        pattern="^(?i)(asc|desc)$",
+        example="desc",
+        description="Sort order: asc or desc"
+    ),
     _=Depends(require_admin),
 ):
     rows = fetch_turns(
@@ -85,9 +110,18 @@ def get_turns(
     },
 )
 def get_summary(
-    since_minutes: Optional[int] = Query(None, ge=1, description="Window size in minutes"),
-    since_hours: Optional[int] = Query(None, ge=1, description="Window size in hours"),
-    _=Depends(require_admin),
+    since_minutes: Optional[int] = Query(
+        None,
+        ge=1,
+        example=90,
+        description="Window size in minutes"
+    ),
+    since_hours: Optional[int] = Query(
+        None,
+        ge=1,
+        example=24,
+        description="Window size in hours"
+    ),
 ):
     if since_minutes is None and since_hours:
         since_minutes = since_hours * 60

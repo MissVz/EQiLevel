@@ -33,9 +33,23 @@ router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
     },
 )
 def get_metrics(
-    session_id: Optional[str] = Query(None),
-    since_minutes: Optional[int] = Query(None, ge=1, description="Only include turns within last N minutes"),
-    since_hours:   Optional[int] = Query(None,  ge=1, description="Only include turns in last N hours"),
+    session_id: Optional[str] = Query(
+        None,
+        example="s3",
+        description="Filter metrics by session ID"
+    ),
+    since_minutes: Optional[int] = Query(
+        None,
+        ge=1,
+        example=60,
+        description="Only include turns from the last N minutes"
+    ),
+    since_hours: Optional[int] = Query(
+        None,
+        ge=1,
+        example=24,
+        description="Only include turns from the last N hours"
+    ),
 ):
     # prefer since_minutes; otherwise convert hours → minutes
     if since_minutes is None and since_hours is not None:
