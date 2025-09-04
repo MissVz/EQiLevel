@@ -1,25 +1,27 @@
 # app/db/schema.py
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from sqlalchemy import String, Integer, Float, JSON, ForeignKey, DateTime, func
+import sqlalchemy as sa
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 class Base(DeclarativeBase): pass
 
 class Session(Base):
     __tablename__ = "sessions"
-    id: Mapped[str] = mapped_column(String, primary_key=True)
-    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
-    turns: Mapped[list["Turn"]] = relationship(back_populates="session")
+    id = sa.Column(sa.BigInteger, primary_key=True, autoincrement=True)
+    created_at = sa.Column(sa.TIMESTAMP, server_default=sa.text("now()"), nullable=False)
+    turns = relationship("Turn", back_populates="session", cascade="all, delete-orphan")
 
 class Turn(Base):
     __tablename__ = "turns"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id"))
-    user_text: Mapped[str] = mapped_column(String)
-    reply_text: Mapped[str] = mapped_column(String)
-    emotion: Mapped[dict] = mapped_column(JSON)
-    performance: Mapped[dict] = mapped_column(JSON)
-    mcp: Mapped[dict] = mapped_column(JSON)
-    reward: Mapped[float] = mapped_column(Float)
-    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
+    id = sa.Column(sa.BigInteger, primary_key=True, autoincrement=True)
 
-    session: Mapped[Session] = relationship(back_populates="turns")
+    session_id = sa.Column(sa.BigInteger, sa.ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+
+    user_text   = sa.Column(sa.String, nullable=False)
+    reply_text  = sa.Column(sa.String, nullable=False)
+    emotion     = sa.Column(sa.JSON,   nullable=False)
+    performance = sa.Column(sa.JSON,   nullable=False)
+    mcp         = sa.Column(sa.JSON,   nullable=False)
+    reward      = sa.Column(sa.Float,  nullable=False)
+    created_at  = sa.Column(sa.TIMESTAMP, server_default=sa.text("now()"), nullable=False)
+
+    session = relationship("Session", back_populates="turns")

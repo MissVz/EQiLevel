@@ -1,4 +1,5 @@
 # app/services/storage.py
+import os
 from sqlalchemy import create_engine, text, select
 from sqlalchemy.orm import sessionmaker
 from app.db.schema import Base, Session as DBSession, Turn
@@ -6,13 +7,37 @@ from app.models import MCP, EmotionSignals, PerformanceSignals, TurnRequest
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 
-_engine = create_engine("sqlite:///./eqilevel.db", future=True)
-SessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
+# 1) Require DATABASE_URL (Postgres)
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL is not set. "
+        "Set it to your Postgres URL, e.g. postgresql+psycopg2://eqi:eqipw@localhost:5432/eqilevel"
+    )
 
-def init_db():
-    Base.metadata.create_all(bind=_engine)
+# 2) Engine
+engine = create_engine(DATABASE_URL, future=True, pool_pre_ping=True)
 
-def db_health() -> tuple[bool, str | None]:
+# 3) Session factory
+SessionLocal = sessionmaker(
+    bind=engine,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
+    future=True,
+)
+
+# 4) Create tables in the same DB the app uses
+def init_db() -> None:
+    Base.metadata.create_all(bind=engine)
+
+def _as_int(value, fieldname="value"):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{fieldname} must be int or a numeric string")
+
+def db_health() -> Tuple[bool, str | None]:
     """
     Check DB availability with a trivial query.
     Returns (ok, error_message).
@@ -34,7 +59,7 @@ def fetch_turns(
 ) -> List[Turn]:
     """
     Fetch recent turns for admin inspection.
-    - session_id: optional filter
+    - session_id: optional filter (accepts int or numeric str)
     - limit: max 200
     - offset: pagination
     - since_minutes: filter by recency
@@ -45,8 +70,8 @@ def fetch_turns(
 
     with SessionLocal() as db:
         stmt = select(Turn)
-        if session_id:
-            stmt = stmt.where(Turn.session_id == session_id)
+        if session_id is not None:
+            stmt = stmt.where(Turn.session_id == _as_int(session_id, "session_id"))
 
         if since_minutes and since_minutes > 0:
             cutoff = datetime.utcnow() - timedelta(minutes=since_minutes)
@@ -66,21 +91,34 @@ def log_turn(ctx, reply_text: str, reward: float):
     # optional separate logging
     pass
 
-def log_turn_full(req: TurnRequest, em: EmotionSignals, perf: PerformanceSignals, mcp: MCP, reply_text: str, reward: float = 0.0):
+def log_turn_full(
+    req: TurnRequest,
+    em: EmotionSignals,
+    perf: PerformanceSignals,
+    mcp: MCP,
+    reply_text: str,
+    reward: float = 0.0
+):
+    """
+    Persist a tutor turn:
+    - ensures the Session row exists (by id)
+    - inserts a Turn row with emotion/performance/mcp/reward payloads
+    """
     with SessionLocal() as db:
-        # ensure session
-        sid = req.session_id or "default"
+        # 🔧 make sure session_id is an int for BIGINT FK
+        sid = _as_int(req.session_id, "session_id")
+
+        # ensure session exists (create if missing)
         sess = db.get(DBSession, sid)
         if not sess:
-            sess = DBSession(id=sid)
-            db.add(sess)
-            db.flush()
+            # Disallow implicit creation
+            raise ValueError(f"Session {sid} does not exist")
 
-        # never allow NULL to hit DB
+        # never allow NULL/empty to hit DB
         safe_reply = (reply_text or "").strip() or "[no_reply]"
 
         db.add(Turn(
-            session_id=sid,
+            session_id=sid,                # BIGINT FK
             user_text=req.user_text,
             reply_text=safe_reply,
             emotion=em.model_dump(),

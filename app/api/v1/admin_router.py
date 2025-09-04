@@ -1,34 +1,36 @@
+# app/api/v1/admin_router.py
 from typing import List, Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.schemas.admin import AdminTurn
 from app.services.admin_summary import admin_summary
-from app.services.storage import fetch_turns
+from app.services.storage import fetch_turns, SessionLocal
 from app.services.security import require_admin
 from app.db.schema import Turn
 from fastapi import Query
+from sqlalchemy import text
 from typing import Optional
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 def _map_turn(t: Turn) -> AdminTurn:
     return AdminTurn(
-        id=t.id,
-        ts=t.created_at,
-        session_id=t.session_id or "unknown",
+        id=int(t.id),
+        session_id=int(t.session_id),
         user_text=t.user_text or "",
         reply_text=t.reply_text or "",
-        reward=t.reward,
         emotion=t.emotion or {},
         performance=t.performance or {},
         mcp=t.mcp or {},
+        reward=float(t.reward),
+        created_at=t.created_at,
     )
 
 @router.get("/turns", response_model=List[AdminTurn])
 def get_turns(
-    session_id: Optional[str] = Query(
+    session_id: Optional[int] = Query(
         None,
-        example="s1",
+        example="12",
         description="Filter by session ID"
     ),
     since_minutes: Optional[int] = Query(
@@ -77,7 +79,7 @@ def get_turns(
                     "example": {
                         "sessions": [
                             {
-                                "session_id": "s3",
+                                "session_id": "12",
                                 "turns_total": 2,
                                 "last_turn_utc": "2025-09-03T19:23:29Z",
                                 "last_emotion": "frustrated",
@@ -88,7 +90,7 @@ def get_turns(
                                 "avg_reward_window": 0.35
                             },
                             {
-                                "session_id": "s1",
+                                "session_id": "15",
                                 "turns_total": 10,
                                 "last_turn_utc": "2025-09-03T05:41:00Z",
                                 "last_emotion": "calm",
@@ -126,3 +128,12 @@ def get_summary(
     if since_minutes is None and since_hours:
         since_minutes = since_hours * 60
     return admin_summary(since_minutes=since_minutes)
+
+@router.get("/turns_raw")
+def turns_raw(limit: int = 10):
+    with SessionLocal() as db:
+        rows = db.execute(text("""
+            SELECT id, session_id, user_text, reply_text, emotion, performance, mcp, reward, created_at
+            FROM turns ORDER BY id DESC LIMIT :limit
+        """), {"limit": limit}).mappings().all()
+        return {"turns": rows}

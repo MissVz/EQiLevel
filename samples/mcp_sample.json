@@ -1,0 +1,5 @@
+{ "session_id": 1, "user_text": "Quick check: 9-4?",
+  "emotion": {"label":"calm","sentiment":0.0},
+  "performance": {"correct":null,"attempts":null,"time_to_solve_sec":null,"accuracy_pct":null},
+  "mcp": {"tone":"neutral","pacing":"medium","difficulty":"hold","style":"mixed","next_step":"explain"}
+}

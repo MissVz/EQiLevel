@@ -1,42 +1,50 @@
 # app/main.py
 import os
+from dotenv import load_dotenv
+
+# Load .env before any imports that read env vars (like storage.py)
+load_dotenv()
+
 from app.api.v1.admin_router import router as admin_router
+from app.api.v1.debug_router import router as debug_router
 from app.api.v1.health_router import router as health_router
 from app.api.v1.metrics_router import router as metrics_router
+from app.api.v1.turn_logger_router import router as turn_logger_router
 from app.db.schema import Turn
 from app.models import TurnRequest, TurnContext, TutorReply, MCP
 from app.services import emotion, mcp, policy, tutor, reward, storage
 from app.services.metrics import compute_metrics
-from app.services.storage import SessionLocal, db_health
+from app.services.storage import SessionLocal, db_health, init_db
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 from fastapi import FastAPI, UploadFile, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    storage.init_db()
+    init_db()
+    print(f"[startup] DATABASE_URL set?: {'yes' if os.getenv('DATABASE_URL') else 'no'}")
     print(f"[startup] OPENAI_API_KEY loaded?: {'yes' if os.getenv('OPENAI_API_KEY') else 'no'}")
-    print("[startup] Database initialized successfully.")
     yield
 
 app = FastAPI(title="EQiLevel API", lifespan=lifespan)
 
-
+# (Optional) CORS — keep origins tight for your front end(s)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
 # Include routers
 app.include_router(admin_router)
+app.include_router(debug_router)
 app.include_router(health_router)
 app.include_router(metrics_router)
+app.include_router(turn_logger_router)
+
 # ================================= GETs =============================
 @app.get("/health")  # (optional) keep a super-light liveness root if you want backward compatibility
 def health_root():

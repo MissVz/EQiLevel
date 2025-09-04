@@ -1,7 +1,22 @@
 # app/models.py
-from pydantic import BaseModel, Field
-from typing import Optional, Literal, Dict, Any, List
+from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from typing import Optional, Literal, Dict, Union, Any, List
 
+class AdminTurn(BaseModel):
+    id: int
+    session_id: Union[int, str]
+    user_text: str
+    reply_text: str
+    emotion: Dict
+    performance: Dict
+    mcp: Dict
+    reward: float
+    created_at: datetime
+
+    # allow constructing by field name even when alias exists
+    model_config = ConfigDict(populate_by_name=True)
+    
 class EmotionSignals(BaseModel):
     label: Literal["frustrated","engaged","bored","calm"]
     sentiment: float = Field(ge=-1.0, le=1.0)
@@ -32,9 +47,11 @@ class MCP(BaseModel):
 
 class TurnRequest(BaseModel):
     user_text: str = Field(..., example="I keep messing up fractions and feel stuck.")
-    session_id: Optional[str] = Field(None, example="s1")
+    session_id: Union[int, str] = Field(None, example="61")
     correct: Optional[bool] = None
-
+    @field_validator("session_id", mode="before")
+    def _coerce_session_id(cls, v): return int(v)
+    
 class TurnContext(BaseModel):
     transcript: str
     emotion: EmotionSignals
