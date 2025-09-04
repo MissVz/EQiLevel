@@ -1,7 +1,8 @@
 # app/api/v1/metrics_router.py
 from typing import Optional
 from fastapi import APIRouter, Query
-from app.services.metrics import compute_metrics
+from fastapi.responses import HTMLResponse
+from app.services.metrics import compute_metrics, compute_series
 
 router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 
@@ -25,7 +26,7 @@ router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
                             "difficulty": {"down": 5, "hold": 5, "up": 2},
                             "next_step": {"example": 5, "explain": 3, "quiz": 4, "prompt": 0, "review": 0}
                         },
-                        "filters": {"session_id": "s3", "since_hours": 24, "window_start_utc": "2025-09-02T20:51:30Z"}
+                        "filters": {"session_id": "s3", "since_minutes": 60, "window_start_utc": "2025-09-02T20:51:30Z"}
                     }
                 }
             },
@@ -48,13 +49,49 @@ def get_metrics(
         None,
         ge=1,
         example=24,
-        description="Only include turns from the last N hours"
+        description="Only include turns from the last N hours (converted to minutes if since_minutes not provided)"
     ),
 ):
     # prefer since_minutes; otherwise convert hours → minutes
     if since_minutes is None and since_hours is not None:
         since_minutes = since_hours * 60
 
-    # Pass through to metrics service
     return compute_metrics(session_id=session_id, since_minutes=since_minutes)
 
+@router.get(
+    "/series",
+    responses={
+        200: {
+            "description": "Time series for dashboard charts",
+            "content": {"application/json": {"example": {
+                "bucket": "minute",
+                "since_minutes": 240,
+                "window_start_utc": "2025-09-02T20:51:30Z",
+                "session_id": "s3",
+                "points": [
+                    {"ts":"2025-09-02T20:10:00Z","turns":4,"avg_reward":0.23,"frustrated":1},
+                    {"ts":"2025-09-02T20:11:00Z","turns":2,"avg_reward":0.17,"frustrated":0},
+                ]
+            }}}
+        }
+    }
+)
+def get_series(
+    session_id: Optional[str] = Query(
+        None, example="s3", description="Filter series by session ID"
+    ),
+    bucket: str = Query(
+        "minute", pattern="^(minute|hour)$", description="Time bucket for aggregation"
+    ),
+    since_minutes: int = Query(
+        240, ge=1, example=240, description="Window size in minutes (default 4 hours)"
+    ),
+):
+    return compute_series(session_id=session_id, since_minutes=since_minutes, bucket=bucket)
+
+@router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+def metrics_dashboard():
+    """
+    Minimal HTML dashboard (no templates required).
+    """
+    return HTML_TEMPLATE

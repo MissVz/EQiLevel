@@ -1,13 +1,19 @@
 """
-EQiLevel Postgres Smoke Test
+Smoke test for EQiLevel stack:
+- Ensures PYTHONPATH includes project root
+- Confirms absolute imports (e.g., app.services.metrics) resolve
+- Verifies DB connectivity and schema
 Run:  python scripts/smoke_postgres.py
 Requires: DATABASE_URL env, API running on localhost:8000
 """
-import os, json, time
+import os, sys, importlib.util, json, time
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=True)  # <-- load .env early
 import requests
-from sqlalchemy import create_engine, text
-from dotenv import load_dotenv
-load_dotenv()  # loads .env from your repo root
+from app.services.storage import SessionLocal, init_db
+from app.db import schema
+from sqlalchemy import create_engine, text, inspect
+
 
 API = "http://127.0.0.1:8000"
 DB_URL = os.getenv("DATABASE_URL")
@@ -17,6 +23,39 @@ def ok(name, cond):
     print(f"[{'PASS' if cond else 'FAIL'}] {name}")
     return cond
 
+def check_pythonpath():
+    root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    sys_path_has_root = root in sys.path
+    env_has_root = os.environ.get("PYTHONPATH", "").find(root) != -1
+    if sys_path_has_root or env_has_root:
+        print("[PASS] PYTHONPATH includes repo root")
+    else:
+        print("[FAIL] PYTHONPATH missing repo root:", root)
+        raise SystemExit(1)
+
+def check_imports():
+    try:
+        # Try importing one of your absolute paths
+        from app.services.metrics import compute_metrics
+        from app.api.v1.metrics_router import get_metrics
+        print("[PASS] Absolute imports resolved (app.*)")
+    except Exception as e:
+        print("[FAIL] Absolute imports failed:", e)
+        raise SystemExit(1)
+
+def check_db_schema():
+    try:
+        init_db()
+        with SessionLocal() as db:
+            inspector = inspect(db.bind)
+            tables = inspector.get_table_names()
+            assert "sessions" in tables, "sessions table missing"
+            assert "turns" in tables, "turns table missing"
+        print("[PASS] DB schema verified: sessions & turns present")
+    except Exception as e:
+        print("[FAIL] DB schema check failed:", e)
+        raise SystemExit(1)
+    
 def main():
     all_pass = True
 
@@ -77,4 +116,7 @@ def main():
 
 if __name__ == "__main__":
     assert DB_URL, "DATABASE_URL must be set"
+    check_pythonpath()
+    check_imports()
+    check_db_schema()
     main()

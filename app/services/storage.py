@@ -1,5 +1,7 @@
 # app/services/storage.py
 import os
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=True)
 from sqlalchemy import create_engine, text, select
 from sqlalchemy.orm import sessionmaker
 from app.db.schema import Base, Session as DBSession, Turn
