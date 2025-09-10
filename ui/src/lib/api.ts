@@ -78,3 +78,55 @@ export async function getAdminTurns(params: {
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
+
+export type MetricsSnapshot = {
+  turns_total: number
+  avg_reward: number
+  frustration_adaptation_rate: number
+  tone_alignment_rate: number
+  last_10_reward_avg: number
+  by_emotion: Record<string, number>
+  action_distribution: {
+    tone: Record<string, number>
+    pacing: Record<string, number>
+    difficulty: Record<string, number>
+    next_step: Record<string, number>
+  }
+  filters: Record<string, any>
+}
+
+export async function getMetrics(params: {
+  sessionId?: number | string
+  sinceMinutes?: number
+  sinceHours?: number
+} = {}): Promise<MetricsSnapshot> {
+  const s = new URLSearchParams()
+  if (params.sessionId != null && String(params.sessionId).trim() !== '') s.set('session_id', String(params.sessionId))
+  if (params.sinceMinutes != null) s.set('since_minutes', String(params.sinceMinutes))
+  if (params.sinceHours != null) s.set('since_hours', String(params.sinceHours))
+  const r = await fetch(`${getApiBase()}/api/v1/metrics?${s.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}
+
+export type MetricsSeries = {
+  bucket: 'minute'|'hour'
+  since_minutes: number
+  window_start_utc?: string | null
+  session_id?: number | string | null
+  points: Array<{ ts: string; turns: number; avg_reward: number; frustrated: number }>
+}
+
+export async function getMetricsSeries(params: {
+  sessionId?: number | string
+  bucket?: 'minute'|'hour'
+  sinceMinutes?: number
+} = {}): Promise<MetricsSeries> {
+  const s = new URLSearchParams()
+  if (params.sessionId != null && String(params.sessionId).trim() !== '') s.set('session_id', String(params.sessionId))
+  s.set('bucket', params.bucket || 'minute')
+  if (params.sinceMinutes != null) s.set('since_minutes', String(params.sinceMinutes))
+  const r = await fetch(`${getApiBase()}/api/v1/metrics/series?${s.toString()}`)
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}

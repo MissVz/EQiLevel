@@ -10,6 +10,7 @@ Pages
 - Chat: text input and push-to-talk audio (MediaRecorder → `/session`)
 - Metrics: link to existing `/api/v1/metrics/dashboard`
 - Admin: filter + table from `/api/v1/admin/turns` (set `X-Admin-Key` in Settings field on page or via `VITE_ADMIN_KEY`)
+- Metrics (in-app): KPIs + series table from `/api/v1/metrics` and `/api/v1/metrics/series` (no external chart deps).
 - Settings: set API base, admin key, and select microphone (stored in `localStorage` as `eqi_api_base`, `eqi_admin_key`, `eqi_mic_id`).
 
 Config
