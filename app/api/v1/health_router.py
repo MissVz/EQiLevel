@@ -1,9 +1,11 @@
 # app/api/v1/health_router.py
-from fastapi import APIRouter, status
-from fastapi.responses import JSONResponse
 import os
 
+from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
+
 from app.services import storage  # expects storage.db_health() -> (ok: bool, err: Optional[str])
+from app.services.storage import db_health
 
 router = APIRouter(prefix="/api/v1", tags=["health"])
 

@@ -36,7 +36,7 @@ EQiLevel/
 │  └─ schemas/
 │     └─ admin.py / models.py       # Pydantic models (e.g., AdminTurn, TurnRequest)
 ├─ samples/mcp_sample.json          # Minimal payload for /session and /turn/log
-├─ scripts/smoke_postgres.py        # PASS/FAIL E2E DB health checker
+├─ tests/test_smoke_postgres.py        # PASS/FAIL E2E DB health checker
 ├─ requirements.txt                 # SQLAlchemy 2.x, Postgres driver, FastAPI, Uvicorn, dotenv, requests
 └─ .env                             # OPENAI_API_KEY, DATABASE_URL
 ```
@@ -152,7 +152,7 @@ docker exec -it eqilevel-db psql -U eqi -d eqilevel   -c 'SELECT id, session_id,
 Or run the smoke test (does all of the above with PASS/FAIL):
 
 ```bash
-python scripts/smoke_postgres.py
+python tests/test_smoke_postgres.py
 # Output should end with: Overall: PASS ✅
 ```
 

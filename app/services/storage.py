@@ -1,13 +1,20 @@
 # app/services/storage.py
 import os
-from dotenv import load_dotenv, find_dotenv
-load_dotenv(find_dotenv(), override=True)
-from sqlalchemy import create_engine, text, select
-from sqlalchemy.orm import sessionmaker
-from app.db.schema import Base, Session as DBSession, Turn
-from app.models import MCP, EmotionSignals, PerformanceSignals, TurnRequest
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
+
+from dotenv import load_dotenv, find_dotenv
+load_dotenv(find_dotenv(), override=True)
+
+from sqlalchemy import create_engine, text, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session as ORMSession
+
+from app.db.schema import  Session as SessionModel, Turn, Base
+
+from app.models import MCP, EmotionSignals, PerformanceSignals, TurnRequest
+
+# ---- engine & session factory ------------------------------------------------
 
 # 1) Require DATABASE_URL (Postgres)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -29,15 +36,23 @@ SessionLocal = sessionmaker(
     future=True,
 )
 
-# 4) Create tables in the same DB the app uses
+# ---- FastAPI dependency ------------------------------------------------------
+def get_db():
+    """
+    FastAPI dependency: yields a database session and ensures close.
+    from fastapi import Depends
+    def route(db: ORMSession = Depends(get_db)):
+        ...
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ---- init & health -----------------------------------------------------------
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
-
-def _as_int(value, fieldname="value"):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        raise ValueError(f"{fieldname} must be int or a numeric string")
 
 def db_health() -> Tuple[bool, str | None]:
     """
@@ -51,6 +66,32 @@ def db_health() -> Tuple[bool, str | None]:
         return True, None
     except Exception as e:
         return False, str(e)
+    
+# ---- helpers -----------------------------------------------------------------
+def _as_int(value, fieldname="value"):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{fieldname} must be int or a numeric string")
+
+def resolve_session_id(db: ORMSession, session_id: Optional[str]) -> int:
+    """
+    Accept int / numeric string / non-numeric client key.
+    Create or reuse a SessionModel row and always return a numeric sessions.id.
+    """
+    if session_id is None:
+        s = SessionModel()
+        db.add(s); db.commit(); db.refresh(s)
+        return s.id
+
+    if isinstance(session_id, int):
+        return session_id
+
+    if isinstance(session_id, str) and session_id.isdigit():
+        return int(session_id)
+
+
+# ---- admin queries -----------------------------------------------------------
     
 def fetch_turns(
     session_id: Optional[str] = None,
@@ -85,6 +126,7 @@ def fetch_turns(
         rows = db.execute(stmt).scalars().all()
         return rows
 
+# ---- logging -----------------------------------------------------------------
 def log_reward(ctx, reward: float, new_mcp: MCP):
     # optional separate logging
     pass
@@ -103,24 +145,23 @@ def log_turn_full(
 ):
     """
     Persist a tutor turn:
-    - ensures the Session row exists (by id)
+    - ensures the Session row exists (by id or client_key)
     - inserts a Turn row with emotion/performance/mcp/reward payloads
     """
     with SessionLocal() as db:
-        # 🔧 make sure session_id is an int for BIGINT FK
-        sid = _as_int(req.session_id, "session_id")
+        # Resolve to numeric FK (create Session row if needed)
+        sid = resolve_session_id(db, req.session_id)
 
-        # ensure session exists (create if missing)
-        sess = db.get(DBSession, sid)
+        # ensure session exists (in case you disabled creation above)
+        sess = db.get(SessionModel, sid)
         if not sess:
-            # Disallow implicit creation
             raise ValueError(f"Session {sid} does not exist")
 
         # never allow NULL/empty to hit DB
         safe_reply = (reply_text or "").strip() or "[no_reply]"
 
         db.add(Turn(
-            session_id=sid,                # BIGINT FK
+            session_id=sid,
             user_text=req.user_text,
             reply_text=safe_reply,
             emotion=em.model_dump(),
