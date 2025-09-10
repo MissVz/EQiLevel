@@ -2,9 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 
 type Props = {
   onStop: (file: File) => void
+  deviceId?: string
 }
 
-export function Recorder({ onStop }: Props) {
+export function Recorder({ onStop, deviceId }: Props) {
   const [rec, setRec] = useState<MediaRecorder|null>(null)
   const [recording, setRecording] = useState(false)
   const chunks = useRef<BlobPart[]>([])
@@ -13,7 +14,10 @@ export function Recorder({ onStop }: Props) {
   async function start() {
     setError(null)
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const constraints: MediaStreamConstraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } as any } : true
+      }
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
       const mr = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' })
       mr.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.current.push(e.data) }
       mr.onstop = () => {
@@ -50,4 +54,3 @@ export function Recorder({ onStop }: Props) {
     </div>
   )
 }
-

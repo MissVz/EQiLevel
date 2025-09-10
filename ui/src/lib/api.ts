@@ -1,15 +1,31 @@
-export const API_BASE: string = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000'
-export const ADMIN_KEY: string | undefined = (import.meta as any).env?.VITE_ADMIN_KEY
+const API_BASE_ENV: string = (import.meta as any).env?.VITE_API_BASE || 'http://127.0.0.1:8000'
+const ADMIN_KEY_ENV: string | undefined = (import.meta as any).env?.VITE_ADMIN_KEY
+
+export function getApiBase(): string {
+  try {
+    return localStorage.getItem('eqi_api_base') || API_BASE_ENV
+  } catch {
+    return API_BASE_ENV
+  }
+}
+
+export function getAdminKey(): string | undefined {
+  try {
+    return localStorage.getItem('eqi_admin_key') || ADMIN_KEY_ENV
+  } catch {
+    return ADMIN_KEY_ENV
+  }
+}
 
 export async function startSession(): Promise<number> {
-  const r = await fetch(`${API_BASE}/session/start`, { method: 'POST' })
+  const r = await fetch(`${getApiBase()}/session/start`, { method: 'POST' })
   if (!r.ok) throw new Error(await r.text())
   const j = await r.json()
   return j.session_id
 }
 
 export async function postTextTurn(sessionId: number, userText: string) {
-  const r = await fetch(`${API_BASE}/session`, {
+  const r = await fetch(`${getApiBase()}/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ session_id: sessionId, user_text: userText })
@@ -23,8 +39,42 @@ export async function postAudioTurn(sessionId: number, file: File, userText?: st
   fd.append('session_id', String(sessionId))
   fd.append('file', file, file.name)
   if (userText) fd.append('user_text', userText)
-  const r = await fetch(`${API_BASE}/session`, { method: 'POST', body: fd })
+  const r = await fetch(`${getApiBase()}/session`, { method: 'POST', body: fd })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
 }
 
+export type AdminTurn = {
+  id: number
+  session_id: number
+  user_text: string
+  reply_text: string
+  emotion: Record<string, any>
+  performance: Record<string, any>
+  mcp: Record<string, any>
+  reward: number
+  created_at: string
+}
+
+export async function getAdminTurns(params: {
+  sessionId?: number | string
+  sinceMinutes?: number
+  limit?: number
+  offset?: number
+  order?: 'asc'|'desc'
+} = {}): Promise<AdminTurn[]> {
+  const s = new URLSearchParams()
+  if (params.sessionId != null && String(params.sessionId).trim() !== '') s.set('session_id', String(params.sessionId))
+  if (params.sinceMinutes != null) s.set('since_minutes', String(params.sinceMinutes))
+  if (params.limit != null) s.set('limit', String(params.limit))
+  if (params.offset != null) s.set('offset', String(params.offset))
+  if (params.order) s.set('order', params.order)
+
+  const headers: Record<string,string> = {}
+  const key = getAdminKey()
+  if (key) headers['X-Admin-Key'] = key
+
+  const r = await fetch(`${getApiBase()}/api/v1/admin/turns?${s.toString()}`, { headers })
+  if (!r.ok) throw new Error(await r.text())
+  return r.json()
+}

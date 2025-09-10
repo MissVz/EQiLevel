@@ -13,11 +13,13 @@ export function Chat() {
   const [text, setText] = useState('')
   const [turns, setTurns] = useState<Turn[]>([])
   const [busy, setBusy] = useState(false)
+  const [micId, setMicId] = useState<string | null>(null)
   const hasSession = sessionId != null
 
   useEffect(() => {
     const saved = localStorage.getItem('eqi_session_id')
     if (saved) setSessionId(Number(saved))
+    try { const mid = localStorage.getItem('eqi_mic_id'); if (mid) setMicId(mid) } catch {}
   }, [])
 
   async function sendText() {
@@ -63,7 +65,7 @@ export function Chat() {
           <button onClick={sendText} disabled={!hasSession || !text.trim() || busy}>Send</button>
         </div>
         <div style={{marginTop:8}}>
-          <Recorder onStop={sendAudio} />
+          <Recorder deviceId={micId || undefined} onStop={sendAudio} />
         </div>
       </div>
       <div className="card">
@@ -80,4 +82,3 @@ export function Chat() {
     </div>
   )
 }
-
