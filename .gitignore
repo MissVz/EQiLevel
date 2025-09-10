@@ -4,3 +4,8 @@
 # Python bytecode
 __pycache__/
 *.py[cod]
+# Node / Vite UI
+ui/node_modules/
+ui/dist/
+# Built SPA copied for FastAPI static serving
+app/web/

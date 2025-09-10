@@ -1,4 +1,4 @@
-# app/api/v1/metrics_router.py
+﻿# app/api/v1/metrics_router.py
 from typing import Optional, Union
 from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse
@@ -113,7 +113,7 @@ HTML_TEMPLATE = """
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>EQīLevel Metrics</title>
+  <title>EQÄ«Level Metrics</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root { --fg:#0b132b; --muted:#6c7a89; --good:#2a9d8f; --warn:#e9c46a; --bad:#e76f51; --blue:#3a86ff;}
@@ -135,10 +135,10 @@ HTML_TEMPLATE = """
     table { border-collapse: collapse; font-size: 13px;}
     td { padding:2px 6px;}
   </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <h1>EQīLevel Metrics</h1>
+  <h1>EQÄ«Level Metrics</h1>
   <div class="sub">Snapshot + live charts from <code>/api/v1/metrics</code> and <code>/api/v1/metrics/series</code></div>
   <div class="form">
     <div>
@@ -163,19 +163,19 @@ HTML_TEMPLATE = """
   <div class="row">
     <div class="card">
       <div>Turns</div>
-      <div class="kpi" id="kpiTurns">-</div>
+      <div class="kpi" id="kpiTurns">â€“</div>
     </div>
     <div class="card">
       <div>Avg Reward</div>
-      <div class="kpi" id="kpiAvg">-</div>
+      <div class="kpi" id="kpiAvg">â€“</div>
     </div>
     <div class="card">
       <div>Frustration Adaptation</div>
-      <div class="kpi" id="kpiAdapt">- <small>rate</small></div>
+      <div class="kpi" id="kpiAdapt">â€“ <small>rate</small></div>
     </div>
     <div class="card">
       <div>Tone Alignment</div>
-      <div class="kpi" id="kpiTone">- <small>rate</small></div>
+      <div class="kpi" id="kpiTone">â€“ <small>rate</small></div>
     </div>
   </div>
 
@@ -301,4 +301,3 @@ loadAll();
 </body>
 </html>
 """
-

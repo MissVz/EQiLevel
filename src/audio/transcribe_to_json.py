@@ -1,65 +1,61 @@
-# AI687 HOS04A – EQiLevel: GPU Whisper Transcription Script
-# Purpose: Transcribe audio with Whisper using GPU (if available) and output structured JSON
-# Theme: Robotics headset-to-classroom interface
-# -------------------------------------------------------------
+"""
+EQiLevel: Whisper transcription helper
+ - Uses GPU if available
+ - Writes a structured JSON next to the audio file (in output_dir)
+ - Optional language hint forwarded to Whisper
+"""
 
-import whisper
-import torch
 import argparse
 import json
 import os
 from datetime import datetime
 
-def detect_device():
+import torch
+import whisper
+
+
+def detect_device() -> str:
     if torch.cuda.is_available():
-        print("🚀 GPU detected — running Whisper with CUDA.")
+        print("GPU detected - using CUDA")
         return "cuda"
-    else:
-        print("🐢 No GPU found — defaulting to CPU.")
-        return "cpu"
+    print("No GPU found - using CPU")
+    return "cpu"
 
-def transcribe_audio(audio_path, model_size="base", output_dir="transcripts"):
+
+def transcribe_audio(audio_path: str, model_size: str = "base", output_dir: str = "transcripts", language: str | None = None) -> str:
     device = detect_device()
-
-    # Load Whisper model
     model = whisper.load_model(model_size, device=device)
 
-    # Run transcription
-    print(f"🔍 Transcribing: {audio_path}")
-    result = model.transcribe(audio_path)
+    print(f"Transcribing: {audio_path}")
+    if language:
+        result = model.transcribe(audio_path, language=language)
+    else:
+        result = model.transcribe(audio_path)
 
-    # Prepare output structure
-    output_data = {
+    output = {
         "timestamp": datetime.now().isoformat(),
         "audio_file": os.path.basename(audio_path),
         "language": result.get("language", "unknown"),
-        "text": result["text"],
-        "segments": result["segments"]
+        "text": result.get("text", ""),
+        "segments": result.get("segments", []),
     }
 
-    # Save to JSON
     os.makedirs(output_dir, exist_ok=True)
     json_filename = os.path.splitext(os.path.basename(audio_path))[0] + "_transcript.json"
     output_path = os.path.join(output_dir, json_filename)
-
     with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(output_data, f, indent=2)
+        json.dump(output, f, indent=2)
 
-    print(f"✅ Transcript saved to: {output_path}")
+    print(f"Transcript saved to: {output_path}")
+    return output_path
 
-    # Print raw transcript
-    transcript_text = result["text"]
-    print("📝 Transcript:")
-    print(transcript_text)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="EQiLevel GPU Whisper Transcriber")
-    parser.add_argument("audio_path", help="Path to the input .wav or .mp3 file")
+    parser = argparse.ArgumentParser(description="EQiLevel Whisper Transcriber")
+    parser.add_argument("audio_path", help="Path to the input audio file")
     parser.add_argument("--model", default="base", help="Whisper model size: tiny, base, small, medium, large")
+    parser.add_argument("--language", default=None, help="Optional language hint (e.g., en, es)")
     args = parser.parse_args()
 
-    transcribe_audio(args.audio_path, model_size=args.model)
+    transcribe_audio(args.audio_path, model_size=args.model, language=args.language)
 
-# -------------------------------------------------------------
-# REFERENCE:
-# OpenAI. (2025). ChatGPT’s assistance with GPU-based Whisper transcription [Large language model]. https://openai.com/chatgpt

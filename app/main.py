@@ -24,7 +24,8 @@ from app.services.storage import SessionLocal, db_health, init_db
 
 from fastapi import FastAPI, UploadFile, Depends, status, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from contextlib import asynccontextmanager
 from src.audio.transcribe_to_json import transcribe_audio
@@ -53,10 +54,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="EQiLevel API", lifespan=lifespan)
 
-# (Optional) CORS — keep origins tight for your front end(s)
+# (Optional) CORS – keep origins tight for your front end(s)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "*",
+    ],
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
@@ -73,6 +80,24 @@ app.include_router(turn_logger_router)
 @app.get("/health")  # (optional) keep a super-light liveness root if you want backward compatibility
 def health_root():
     return {"status": "ok"}
+
+
+# -------- Serve built SPA (if present) and root redirect --------
+try:
+    web_dir = os.path.join(os.path.dirname(__file__), "web")
+    if os.path.isdir(web_dir):
+        app.mount("/web", StaticFiles(directory=web_dir, html=True), name="web")
+except Exception as _e:
+    # Don't fail API startup if web assets are missing
+    pass
+
+
+@app.get("/", include_in_schema=False)
+def root_redirect():
+    # Prefer web UI if built; otherwise docs
+    web_dir = os.path.join(os.path.dirname(__file__), "web")
+    target = "/web" if os.path.isdir(web_dir) else "/docs"
+    return RedirectResponse(target)
 
 @app.get("/metrics")
 def metrics(session_id: Optional[str] = None):
@@ -143,8 +168,17 @@ def tutor_reply(ctx: TurnContext):
     status_code=status.HTTP_200_OK,
 )
 async def session_turn(request: Request, file: UploadFile = File(None), session_id: int = Form(None), user_text: str = Form(None)):
-    # If multipart/form-data (audio upload from UI)
+    # Support both JSON (text turns) and multipart/form-data (audio uploads)
     transcript = None
+    # If JSON body, extract fields
+    try:
+        ct = request.headers.get("content-type", "")
+        if "application/json" in ct:
+            payload = await request.json()
+            user_text = payload.get("user_text")
+            session_id = payload.get("session_id")
+    except Exception:
+        pass
     if file is not None:
         # Save uploaded file to temp, transcribe
         file_bytes = await file.read()
