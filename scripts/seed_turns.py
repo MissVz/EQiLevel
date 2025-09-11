@@ -17,7 +17,7 @@ import json
 import random
 import sys
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 import requests
 
@@ -50,7 +50,7 @@ def post_turn(host: str, payload: Dict[str, Any], reward: float) -> Dict[str, An
     return r.json()
 
 
-def sample_turn(session_id: int) -> (Dict[str, Any], float):
+def sample_turn(session_id: int) -> Tuple[Dict[str, Any], float]:
     # Emotions, mapped to preferred tutoring adjustments
     cases = [
         ("engaged",    {"tone": "encouraging", "pacing": "medium", "difficulty": "hold", "next_step": "quiz"},  (0.08, 0.16)),

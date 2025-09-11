@@ -6,11 +6,11 @@ from typing import Optional, List, Tuple
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=True)
 
-from sqlalchemy import create_engine, text, select
+from sqlalchemy import create_engine, text, select, func
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import Session as ORMSession
 
-from app.db.schema import  Session as SessionModel, Turn, Base
+from app.db.schema import  Session as SessionModel, Turn, Base, User, SessionUser, Setting
 
 from app.models import MCP, EmotionSignals, PerformanceSignals, TurnRequest
 
@@ -90,6 +90,12 @@ def resolve_session_id(db: ORMSession, session_id: Optional[str]) -> int:
     if isinstance(session_id, str) and session_id.isdigit():
         return int(session_id)
 
+    # For any other (non-numeric) string key, create a new Session row
+    if isinstance(session_id, str):
+        s = SessionModel()
+        db.add(s); db.commit(); db.refresh(s)
+        return s.id
+    
 
 # ---- admin queries -----------------------------------------------------------
     
@@ -126,6 +132,102 @@ def fetch_turns(
         rows = db.execute(stmt).scalars().all()
         return rows
 
+# ---- users -------------------------------------------------------------------
+def get_or_create_user(name: str) -> int:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("name is required")
+    with SessionLocal() as db:
+        u = db.execute(select(User).where(func.lower(User.name) == name.lower())).scalar_one_or_none()
+        if u:
+            return int(u.id)
+        u = User(name=name)
+        db.add(u)
+        db.commit(); db.refresh(u)
+        return int(u.id)
+
+def list_users(query: str | None = None, limit: int = 20) -> list[User]:
+    limit = max(1, min(limit, 50))
+    with SessionLocal() as db:
+        stmt = select(User)
+        if query:
+            q = f"%{query.strip().lower()}%"
+            stmt = stmt.where(func.lower(User.name).like(q))
+        stmt = stmt.order_by(User.name.asc()).limit(limit)
+        return db.execute(stmt).scalars().all()
+
+def bind_user_to_session(session_id: int, user_id: int) -> None:
+    with SessionLocal() as db:
+        exists = db.execute(select(SessionUser).where(SessionUser.session_id == session_id)).scalar_one_or_none()
+        if exists:
+            return
+        db.add(SessionUser(session_id=session_id, user_id=user_id))
+        db.commit()
+
+def sessions_for_user(user_id: int) -> list[int]:
+    with SessionLocal() as db:
+        rows = db.execute(select(SessionUser.session_id).where(SessionUser.user_id == user_id)).scalars().all()
+        return [int(x) for x in rows]
+
+def get_user_for_session(session_id: int) -> User | None:
+    with SessionLocal() as db:
+        su = db.execute(select(SessionUser).where(SessionUser.session_id == session_id)).scalar_one_or_none()
+        if not su:
+            return None
+        u = db.get(User, su.user_id)
+        return u
+
+# ---- app settings (key/value) -----------------------------------------------
+def get_setting(key: str) -> str | None:
+    with SessionLocal() as db:
+        row = db.get(Setting, key)
+        return row.value if row else None
+
+def set_setting(key: str, value: str | None) -> None:
+    with SessionLocal() as db:
+        row = db.get(Setting, key)
+        if value is None or value == "":
+            if row:
+                db.delete(row); db.commit()
+            return
+        if row:
+            row.value = value
+        else:
+            db.add(Setting(key=key, value=value))
+        db.commit()
+
+def get_system_prompt() -> str | None:
+    return get_setting("system_prompt")
+
+def dialogue_messages(session_id: int, limit: int = 8) -> list[dict]:
+    """
+    Return recent dialogue for a session as OpenAI-style messages, oldest→newest.
+    Each DB row becomes two messages: {role:'user', content:user_text},
+    then {role:'assistant', content:reply_text}.
+    """
+    limit = max(1, min(limit, 20))
+    with SessionLocal() as db:
+        rows = (
+            db.execute(
+                select(Turn)
+                .where(Turn.session_id == _as_int(session_id, "session_id"))
+                .order_by(Turn.id.desc())
+                .limit(limit)
+            )
+            .scalars()
+            .all()
+        )
+    rows = list(reversed(rows))
+    messages: list[dict] = []
+    for r in rows:
+        ut = (r.user_text or "").strip()
+        rt = (r.reply_text or "").strip()
+        if ut:
+            messages.append({"role": "user", "content": ut})
+        if rt:
+            messages.append({"role": "assistant", "content": rt})
+    return messages
+
 # ---- logging -----------------------------------------------------------------
 def log_reward(ctx, reward: float, new_mcp: MCP):
     # optional separate logging
@@ -141,7 +243,8 @@ def log_turn_full(
     perf: PerformanceSignals,
     mcp: MCP,
     reply_text: str,
-    reward: float = 0.0
+    reward: float = 0.0,
+    objective_code: str | None = None,
 ):
     """
     Persist a tutor turn:
@@ -151,6 +254,8 @@ def log_turn_full(
     with SessionLocal() as db:
         # Resolve to numeric FK (create Session row if needed)
         sid = resolve_session_id(db, req.session_id)
+        if not isinstance(sid, int):
+            raise ValueError(f"invalid session id: {sid!r}")
 
         # ensure session exists (in case you disabled creation above)
         sess = db.get(SessionModel, sid)
@@ -160,12 +265,19 @@ def log_turn_full(
         # never allow NULL/empty to hit DB
         safe_reply = (reply_text or "").strip() or "[no_reply]"
 
+        perf_payload = perf.model_dump()
+        if objective_code:
+            try:
+                perf_payload = {**perf_payload, "objective_code": str(objective_code)}
+            except Exception:
+                pass
+
         db.add(Turn(
             session_id=sid,
             user_text=req.user_text,
             reply_text=safe_reply,
             emotion=em.model_dump(),
-            performance=perf.model_dump(),
+            performance=perf_payload,
             mcp=mcp.model_dump(),
             reward=reward
         ))

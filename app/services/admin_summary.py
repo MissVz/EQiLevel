@@ -1,6 +1,6 @@
 # app/services/admin_summary.py
 from __future__ import annotations
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import select, func, and_, tuple_
@@ -18,7 +18,7 @@ def admin_summary(since_minutes: Optional[int] = None) -> Dict[str, Any]:
     """
     cutoff_dt = None
     if since_minutes and since_minutes > 0:
-        cutoff_dt = datetime.utcnow() - timedelta(minutes=since_minutes)
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
 
     with SessionLocal() as db:
         # 1) Total turns per session
@@ -32,7 +32,7 @@ def admin_summary(since_minutes: Optional[int] = None) -> Dict[str, Any]:
         if not totals:
             return {
                 "sessions": [],
-                "filters": {"since_minutes": since_minutes, "window_start_utc": cutoff_dt.isoformat() + "Z" if cutoff_dt else None},
+                "filters": {"since_minutes": since_minutes, "window_start_utc": cutoff_dt.isoformat().replace("+00:00", "Z") if cutoff_dt else None},
             }
 
         # 2) Latest id per session (to inspect last turn fields fast)
@@ -80,7 +80,7 @@ def admin_summary(since_minutes: Optional[int] = None) -> Dict[str, Any]:
             summary.append({
                 "session_id": sid,
                 "turns_total": int(total),
-                "last_turn_utc": (last.created_at.isoformat() + "Z") if last and last.created_at else None,
+                "last_turn_utc": (last.created_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z") if getattr(last, 'created_at', None) and getattr(last.created_at, 'tzinfo', None) is not None else (last.created_at.isoformat() + "Z") if last and last.created_at else None),
                 "last_emotion": (last.emotion or {}).get("label") if last and last.emotion else None,
                 "last_reward": float(last.reward) if (last and last.reward is not None) else None,
                 "last_difficulty": (last.mcp or {}).get("difficulty") if last and last.mcp else None,
@@ -96,6 +96,6 @@ def admin_summary(since_minutes: Optional[int] = None) -> Dict[str, Any]:
             "sessions": summary,
             "filters": {
                 "since_minutes": since_minutes,
-                "window_start_utc": cutoff_dt.isoformat() + "Z" if cutoff_dt else None
+                "window_start_utc": cutoff_dt.isoformat().replace("+00:00", "Z") if cutoff_dt else None
             },
         }

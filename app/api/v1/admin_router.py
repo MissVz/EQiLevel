@@ -30,33 +30,33 @@ def _map_turn(t: Turn) -> AdminTurn:
 def get_turns(
     session_id: Optional[int] = Query(
         None,
-        example="12",
-        description="Filter by session ID"
+        description="Filter by session ID",
+        examples={"example": {"value": 12}},
     ),
     since_minutes: Optional[int] = Query(
         None,
         ge=1,
-        example=120,
-        description="Only include turns from the last N minutes"
+        description="Only include turns from the last N minutes",
+        examples={"example": {"value": 120}},
     ),
     limit: int = Query(
         50,
         ge=1,
         le=200,
-        example=10,
-        description="Maximum number of results to return"
+        description="Maximum number of results to return",
+        examples={"example": {"value": 10}},
     ),
     offset: int = Query(
         0,
         ge=0,
-        example=0,
-        description="Number of results to skip (for paging)"
+        description="Number of results to skip (for paging)",
+        examples={"example": {"value": 0}},
     ),
     order: str = Query(
         "desc",
         pattern="^(?i)(asc|desc)$",
-        example="desc",
-        description="Sort order: asc or desc"
+        description="Sort order: asc or desc",
+        examples={"example": {"value": "desc"}},
     ),
     _=Depends(require_admin),
 ):
@@ -115,14 +115,14 @@ def get_summary(
     since_minutes: Optional[int] = Query(
         None,
         ge=1,
-        example=90,
-        description="Window size in minutes"
+        description="Window size in minutes",
+        examples={"example": {"value": 90}},
     ),
     since_hours: Optional[int] = Query(
         None,
         ge=1,
-        example=24,
-        description="Window size in hours"
+        description="Window size in hours",
+        examples={"example": {"value": 24}},
     ),
 ):
     if since_minutes is None and since_hours:
@@ -130,7 +130,7 @@ def get_summary(
     return admin_summary(since_minutes=since_minutes)
 
 @router.get("/turns_raw")
-def turns_raw(limit: int = 10):
+def turns_raw(limit: int = 10, _=Depends(require_admin)):
     with SessionLocal() as db:
         rows = db.execute(text("""
             SELECT id, session_id, user_text, reply_text, emotion, performance, mcp, reward, created_at

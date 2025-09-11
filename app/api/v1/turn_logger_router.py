@@ -22,7 +22,7 @@ class TurnLogBody(BaseModel):
     @classmethod
     def _coerce_session_id(cls, v):
         try:
-            return int(v)
+            i = int(v)
         except (TypeError, ValueError):
             raise ValueError("session_id must be int or numeric string")
         if i <= 0:
@@ -35,7 +35,7 @@ class TurnLogResponse(BaseModel):
 
 @router.post("/turn/log", summary="Persist a turn (guaranteed)", response_model=TurnLogResponse)
 def log_turn(body: TurnLogBody, reward: float = Query(0.0)):
-    with SessionLocal() as db:  # type: SASession
+    with SessionLocal() as db:
         try:
             sess = db.get(DBSession, body.session_id)
             if not sess:

@@ -35,20 +35,20 @@ router = APIRouter(prefix="/api/v1/metrics", tags=["metrics"])
 def get_metrics(
     session_id: Optional[str] = Query(
         None,
-        example="3",
-        description="Filter metrics by session ID (numeric)"
+        description="Filter metrics by session ID (numeric)",
+        examples={"example": {"value": "3"}},
     ),
     since_minutes: Optional[int] = Query(
         None,
         ge=1,
-        example=60,
-        description="Only include turns from the last N minutes"
+        description="Only include turns from the last N minutes",
+        examples={"example": {"value": 60}},
     ),
     since_hours: Optional[int] = Query(
         None,
         ge=1,
-        example=24,
-        description="Only include turns from the last N hours (converted to minutes if since_minutes not provided)"
+        description="Only include turns from the last N hours (converted to minutes if since_minutes not provided)",
+        examples={"example": {"value": 24}},
     ),
 ):
     # prefer since_minutes; otherwise convert hours â†’ minutes
@@ -84,13 +84,13 @@ def get_metrics(
 )
 def get_series(
     session_id: Optional[str] = Query(
-        None, example="3", description="Filter series by session ID (numeric)"
+        None, description="Filter series by session ID (numeric)", examples={"example": {"value": "3"}}
     ),
     bucket: str = Query(
         "minute", pattern="^(minute|hour)$", description="Time bucket for aggregation"
     ),
     since_minutes: int = Query(
-        240, ge=1, example=240, description="Window size in minutes (default 4 hours)"
+        240, ge=1, description="Window size in minutes (default 4 hours)", examples={"example": {"value": 240}}
     ),
 ):
     sid: Optional[int] = None

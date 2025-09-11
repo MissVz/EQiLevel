@@ -8,6 +8,9 @@ header h1{ font-size:18px; margin:0; }
 nav{ display:flex; gap:8px; align-items:center; }
 button{ padding:8px 12px; border:1px solid #ddd; border-radius:8px; background:#fff; cursor:pointer; }
 button.active{ background:var(--blue); color:white; border-color:var(--blue); }
+/* Style buttons inside active NavLink */
+nav a.active > button{ background:var(--blue); color:white; border-color:var(--blue); }
+nav a{ text-decoration:none; }
 button:disabled{ opacity:.6; cursor:not-allowed; }
 input{ padding:8px 10px; border:1px solid #ddd; border-radius:8px; flex:1; min-width:200px; }
 .link{ color:var(--blue); text-decoration:none; padding:6px 8px; }
@@ -22,6 +25,18 @@ input{ padding:8px 10px; border:1px solid #ddd; border-radius:8px; flex:1; min-w
 .chat .t{ align-self:flex-start; }
 .chat .bubble{ display:inline-block; padding:8px 10px; border-radius:10px; background:#eef2ff; }
 .chat .u .bubble{ background:#dcfce7; }
+.chat .bubble.live{ opacity:0.7; font-style:italic; }
 .who{ font-size:11px; color:var(--muted); margin-bottom:2px; }
 @media (max-width: 900px){ .grid{ grid-template-columns: 1fr; } }
 
+.badges{ display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+.badge{ font-size:11px; padding:2px 6px; border-radius:999px; background:#f1f5f9; border:1px solid #e5e7eb; }
+.chips{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.chip{ padding:6px 8px; border:1px solid #ddd; border-radius:999px; background:#fff; cursor:pointer; }
+.chip.active{ border-color:var(--blue); color:var(--blue); }
+
+/* Health dot */
+.dot{ width:10px; height:10px; border-radius:999px; display:inline-block; border:1px solid #ddd; background:#9ca3af }
+.dot.ok{ background:#10b981; border-color:#059669 }
+.dot.warn{ background:#f59e0b; border-color:#d97706 }
+.dot.err{ background:#ef4444; border-color:#dc2626 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { getMetrics, getMetricsSeries, MetricsSeries, MetricsSnapshot } from '../lib/api'
 
 function useLocalStorage(key: string, initial: string = ''): [string, (v: string)=>void] {
@@ -13,13 +13,15 @@ export function Metrics() {
   const [sessionId, setSessionId] = useLocalStorage('eqi_metrics_session', '')
   const [since, setSince] = useLocalStorage('eqi_metrics_since', '240')
   const [bucket, setBucket] = useLocalStorage('eqi_metrics_bucket', 'minute')
+  const [auto, setAuto] = useLocalStorage('eqi_metrics_auto', '0')
+  const [intervalSec, setIntervalSec] = useLocalStorage('eqi_metrics_interval', '10')
 
   const [snap, setSnap] = useState<MetricsSnapshot | null>(null)
   const [series, setSeries] = useState<MetricsSeries | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string|null>(null)
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true); setError(null)
     try {
       const [s, ser] = await Promise.all([
@@ -29,12 +31,18 @@ export function Metrics() {
       setSnap(s); setSeries(ser)
     } catch (e: any) { setError(e?.message || String(e)); setSnap(null); setSeries(null) }
     finally { setLoading(false) }
-  }
+  }, [sessionId, since, bucket])
 
   function useCurrentSession() { try { const sid = localStorage.getItem('eqi_session_id'); if (sid) setSessionId(sid) } catch {}
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (auto !== '1') return
+    const ms = Math.max(2, Number(intervalSec) || 10) * 1000
+    const id = setInterval(load, ms)
+    return () => clearInterval(id)
+  }, [auto, intervalSec, load])
 
   return (
     <div className="card">
@@ -58,6 +66,14 @@ export function Metrics() {
         <div className="row" style={{gap:8, alignItems:'flex-end'}}>
           <button onClick={load} disabled={loading}>{loading? 'Loading…':'Refresh'}</button>
           <button onClick={useCurrentSession}>Use current session</button>
+          <label className="muted" style={{display:'flex', alignItems:'center', gap:6}}>
+            <input type="checkbox" checked={auto==='1'} onChange={e=>setAuto(e.target.checked ? '1':'0')} /> auto-refresh
+          </label>
+          <div className="row" style={{gap:6}}>
+            <label className="muted">every</label>
+            <input type="number" min={2} style={{width:60}} value={intervalSec} onChange={e=>setIntervalSec(e.target.value)} />
+            <label className="muted">sec</label>
+          </div>
         </div>
       </div>
       {error && <div className="error" style={{marginTop:8}}>Error: {error}</div>}
@@ -96,6 +112,14 @@ export function Metrics() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Series charts */}
+      {series && series.points && series.points.length>0 && (
+        <div style={{marginTop:12}}>
+          <h3 style={{margin:'4px 0'}}>Charts</h3>
+          <MiniCharts series={series} />
         </div>
       )}
 
@@ -161,3 +185,45 @@ function Td({ children }: { children: React.ReactNode }) {
   return <td style={{ padding:'6px 8px', borderBottom:'1px solid #f0f0f0', verticalAlign:'top' }}>{children}</td>
 }
 
+// -------- Simple inline charts (no deps) --------
+function MiniCharts({ series }: { series: MetricsSeries }) {
+  const W = 640, H = 140, P = 24
+  const pts = series.points
+  // x index mapping
+  const turns = pts.map(p=>p.turns)
+  const rewards = pts.map(p=>p.avg_reward)
+  const maxTurns = Math.max(1, ...turns)
+  const minR = Math.min(...rewards, 0)
+  const maxR = Math.max(...rewards, 1)
+  const sx = (i:number)=> P + (W-2*P) * (i/(Math.max(1, pts.length-1)))
+  // bar scale derived inline below
+  const syReward = (v:number)=> H-P - (H-2*P) * ((v - minR) / (maxR - minR || 1))
+  const pathR = rewards.map((v,i)=>`${i?'L':'M'}${sx(i)},${syReward(v)}`).join(' ')
+  return (
+    <div className="grid">
+      <div className="card">
+        <div className="muted">Avg reward</div>
+        <svg width={W} height={H}>
+          <rect x={0} y={0} width={W} height={H} fill="#fff" stroke="#eee" />
+          <path d={pathR} fill="none" stroke="#3a86ff" strokeWidth={2} />
+          {rewards.map((v,i)=> (
+            <circle key={i} cx={sx(i)} cy={syReward(v)} r={2.5} fill="#3a86ff" />
+          ))}
+        </svg>
+      </div>
+      <div className="card">
+        <div className="muted">Turns</div>
+        <svg width={W} height={H}>
+          <rect x={0} y={0} width={W} height={H} fill="#fff" stroke="#eee" />
+          {turns.map((v,i)=>{
+            const x = sx(i)
+            const bw = (W-2*P)/Math.max(pts.length,1) * 0.8
+            const h = (H-2*P) * (v/maxTurns)
+            const y = H-P-h
+            return <rect key={i} x={x-bw/2} y={y} width={bw} height={h} fill="#94a3b8" />
+          })}
+        </svg>
+      </div>
+    </div>
+  )
+}

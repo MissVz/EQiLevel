@@ -1,21 +1,30 @@
 import React, { useEffect, useState } from 'react'
-import { startSession } from '../lib/api'
+import { useNavigate } from 'react-router-dom'
+import { startSession, getUsers, type SimpleUser } from '../lib/api'
 
 export function Session() {
   const [sessionId, setSessionId] = useState<number | null>(null)
   const [starting, setStarting] = useState(false)
+  const navigate = useNavigate()
+  const [userName, setUserName] = useState<string>(() => { try { return localStorage.getItem('eqi_user_name') || '' } catch { return '' } })
+  const [users, setUsers] = useState<SimpleUser[]>([])
 
   useEffect(() => {
     const saved = localStorage.getItem('eqi_session_id')
     if (saved) setSessionId(Number(saved))
+    // preload users for autocomplete (lightweight)
+    getUsers().then(setUsers).catch(()=>{})
   }, [])
 
   async function handleStart() {
     setStarting(true)
     try {
-      const id = await startSession()
+      const id = await startSession(userName || undefined)
       setSessionId(id)
       localStorage.setItem('eqi_session_id', String(id))
+      if (userName) try { localStorage.setItem('eqi_user_name', userName) } catch {}
+      // Navigate user directly to Chat after creating a session
+      try { navigate('/chat') } catch {}
     } finally {
       setStarting(false)
     }
@@ -31,7 +40,11 @@ export function Session() {
       <h2>Session</h2>
       <p>Start a new learner session and store it locally for the Chat page.</p>
       <div className="row">
-        <button onClick={handleStart} disabled={starting}>Start Session</button>
+        <input list="user-list" value={userName} onChange={e=>setUserName(e.target.value)} placeholder="Student name (optional)" style={{minWidth:260}} />
+        <datalist id="user-list">
+          {users.map(u => (<option key={u.id} value={u.name} />))}
+        </datalist>
+        <button onClick={handleStart} disabled={starting || !userName.trim()}>Start Session</button>
         <button onClick={clearSession} disabled={!sessionId}>Clear</button>
       </div>
       <div className="muted" style={{marginTop:8}}>
@@ -40,4 +53,3 @@ export function Session() {
     </div>
   )
 }
-

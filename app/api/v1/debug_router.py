@@ -9,6 +9,7 @@ router = APIRouter(prefix="/api/v1/debug", tags=["debug"])
 def debug_db():
     with SessionLocal() as db:
         info = {"db_url": db.bind.url.render_as_string(hide_password=True)}
-        n_sessions = db.execute(text("SELECT COUNT(*) FROM Session")).scalar()
-        n_turns    = db.execute(text("SELECT COUNT(*) FROM Turn")).scalar()
-        return {"info": info, "counts": {"Session": n_sessions, "Turn": n_turns}}
+        # Use actual table names
+        n_sessions = db.execute(text("SELECT COUNT(*) FROM sessions")).scalar()
+        n_turns    = db.execute(text("SELECT COUNT(*) FROM turns")).scalar()
+        return {"info": info, "counts": {"sessions": n_sessions, "turns": n_turns}}

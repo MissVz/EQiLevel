@@ -47,9 +47,11 @@ class MCP(BaseModel):
     next_step: Literal["explain","example","prompt","quiz","review"]
     
 class TurnRequest(BaseModel):
-    user_text: str = Field(..., example="I keep messing up fractions and feel stuck.")
-    session_id: Union[int, str, None] = Field(None, example="61")
+    user_text: str
+    session_id: Union[int, str, None] = None
     correct: Optional[bool] = None
+    # Optional curriculum objective to guide the tutor for this turn
+    objective_code: Optional[str] = None
 
     @field_validator("session_id", mode="before")
     @classmethod
@@ -70,3 +72,5 @@ class TutorReply(BaseModel):
     text: str
     mcp: MCP
     reward: Optional[float] = None
+    # Optional echo of the user's input (for audio: the transcription)
+    transcript: Optional[str] = None

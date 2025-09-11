@@ -7,7 +7,7 @@ import torchaudio
 try:
     from speechbrain.inference import EncoderClassifier  # >=1.0
 except Exception:  # pragma: no cover
-    from speechbrain.pretrained import EncoderClassifier  # <1.0 (deprecated)
+    from speechbrain.inference import EncoderClassifier  # <1.0 (deprecated)
 
 # Allow multiple variants, case insensitive
 _CORRECT_RE = re.compile(r"\b(got\s*it|i\s*solved|solved\s*it|worked)\b", re.I)

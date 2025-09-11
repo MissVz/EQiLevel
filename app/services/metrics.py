@@ -2,7 +2,7 @@
 from __future__ import annotations
 from app.db.schema import Turn
 from app.services.storage import SessionLocal
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import select, func, or_, case, String
 from typing import Optional, Dict, Any, List
 
@@ -85,8 +85,13 @@ def _series_basic(db, session_id: Optional[str], cutoff_dt: Optional[datetime], 
     rows = db.execute(_with_filters(base_stmt)).all()
     series = []
     for ts, turns, avg_reward, frustrated in rows:
+        # Ensure UTC 'Z' formatting
+        if getattr(ts, 'tzinfo', None) is not None:
+            ts_str = ts.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+        else:
+            ts_str = ts.isoformat() + "Z"
         series.append({
-            "ts": ts.isoformat() + "Z",
+            "ts": ts_str,
             "turns": int(turns or 0),
             "avg_reward": float(avg_reward or 0.0),
             "frustrated": int(frustrated or 0),
@@ -112,7 +117,7 @@ def compute_metrics(session_id: Optional[int] = None,
     # Helper: apply session/time filters
     cutoff_dt = None
     if since_minutes and since_minutes > 0:
-        cutoff_dt = datetime.utcnow() - timedelta(minutes=since_minutes)
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
 
     def _with_filters(stmt):
         if session_id:
@@ -243,7 +248,8 @@ def compute_metrics(session_id: Optional[int] = None,
             filters["session_id"] = session_id
         if since_minutes:
             filters["since_minutes"] = since_minutes
-            filters["window_start_utc"] = (datetime.utcnow() - timedelta(minutes=since_minutes)).isoformat() + "Z"
+            ws = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
+            filters["window_start_utc"] = ws.isoformat().replace("+00:00", "Z")
 
         return {
             "turns_total": turns_total,
@@ -264,7 +270,7 @@ def compute_series(session_id: Optional[str] = None,
     """
     cutoff_dt = None
     if since_minutes and since_minutes > 0:
-        cutoff_dt = datetime.utcnow() - timedelta(minutes=since_minutes)
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=since_minutes)
 
     with SessionLocal() as db:
         series = _series_basic(db, session_id=session_id, cutoff_dt=cutoff_dt, bucket=bucket)
@@ -272,7 +278,7 @@ def compute_series(session_id: Optional[str] = None,
     return {
         "bucket": bucket,
         "since_minutes": since_minutes,
-        "window_start_utc": (datetime.utcnow() - timedelta(minutes=since_minutes)).isoformat() + "Z" if since_minutes else None,
+        "window_start_utc": (datetime.now(timezone.utc) - timedelta(minutes=since_minutes)).isoformat().replace("+00:00", "Z") if since_minutes else None,
         "session_id": session_id,
         "points": series,
     }
