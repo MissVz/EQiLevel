@@ -25,8 +25,24 @@ export function App() {
     const id = setInterval(load, 30000)
     return () => { alive = false; clearInterval(id) }
   }, [])
-  const dotClass = health ? (health.status === 'ok' ? 'dot ok' : 'dot warn') : 'dot err'
-  const dotTitle = health ? `OpenAI: ${health.components.openai_key}; DB: ${health.components.database}` : (healthErr || 'Health unknown')
+  // Build indicator state
+  const problems: string[] = []
+  if (health && health.components) {
+    const c = health.components as any
+    const map: Record<string,string> = { database: 'DB', openai_key: 'LLM', ffmpeg: 'FFMPEG' }
+    Object.keys(c).forEach(k => {
+      const v = String(c[k])
+      const bad = (v === 'down' || v === 'missing' || v === 'error')
+      if (bad) problems.push(map[k] || k.toUpperCase())
+    })
+  }
+  const label = health
+    ? (problems.length ? `${problems.join('+')} Unavailable` : 'healthy')
+    : 'unknown'
+  const dotClass = health ? (problems.length === 0 ? 'dot ok' : 'dot warn') : 'dot err'
+  const dotTitle = health
+    ? `OpenAI: ${health.components.openai_key}; DB: ${health.components.database}` + (health.components.ffmpeg ? `; ffmpeg: ${health.components.ffmpeg}` : '')
+    : (healthErr || 'Health unknown')
   return (
     <div className="container">
       <header>
@@ -40,7 +56,7 @@ export function App() {
           <a className="link" href={`${getApiBase()}/docs`} target="_blank" rel="noopener noreferrer">API Docs</a>
           <span className="muted" title={dotTitle} style={{display:'inline-flex', alignItems:'center', gap:6}}>
             <span className={dotClass} />
-            {health ? (health.status === 'ok' ? 'healthy' : 'degraded') : 'unknown'}
+            {label}
           </span>
         </nav>
       </header>

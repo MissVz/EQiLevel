@@ -3,6 +3,7 @@ import type { MCP, TutorReply, Objective, SimpleUser, ObjectiveProgressItem } fr
 import { postAudioTurn, postTextTurn, getObjectives, getUserBySession, getObjectiveProgress } from '../lib/api'
 import { Recorder, type RecorderHandle } from '../components/recorder'
 import { Streamer, type StreamerHandle } from '../components/streamer'
+import { speak, cancelSpeak } from '../lib/tts'
 
 type Turn = {
   role: 'user'|'tutor'
@@ -151,6 +152,7 @@ export function Chat() {
       const changes = diffMcp(mcp, resp?.mcp || null)
       const withReward = typeof resp?.reward === 'number' ? [...changes, `reward: ${resp.reward.toFixed(3)}`] : changes
       setTurns(t => [...t, { role: 'tutor', text: replyText, raw: resp, diffs: withReward }])
+      try { speak(replyText) } catch {}
       if (resp?.mcp) setMcp(resp.mcp)
     } catch (e: any) {
       setTurns(t => [...t, { role: 'tutor', text: `Error: ${e?.message || e}` }])
@@ -167,6 +169,7 @@ export function Chat() {
       const replyText = String(resp?.text ?? '').trim() || '[Tutor] …'
       const changes = diffMcp(mcp, resp?.mcp || null)
       setTurns(t => [...t, { role: 'tutor', text: replyText, raw: resp, diffs: changes }])
+      try { speak(replyText) } catch {}
       if (resp?.mcp) setMcp(resp.mcp)
       setText('')
     } catch (e: any) {
@@ -186,6 +189,7 @@ export function Chat() {
       const replyText = String(resp?.text ?? '').trim() || '[Tutor] …'
       const changes = diffMcp(mcp, resp?.mcp || null)
       setTurns(t => [...t, { role: 'tutor', text: replyText, raw: resp, diffs: changes }])
+      try { speak(replyText) } catch {}
       if (resp?.mcp) setMcp(resp.mcp)
       setText('')
     } catch (e: any) {
@@ -252,11 +256,13 @@ export function Chat() {
             onReply={(reply)=>{
             const changes = diffMcp(mcp, reply?.mcp || null)
             setTurns(t => [...t, { role: 'tutor', text: reply.text, raw: reply, diffs: changes }])
+            try { speak(reply.text) } catch {}
             if (reply?.mcp) setMcp(reply.mcp as any)
           }} />
         </div>
         <div className="row" style={{marginTop:8}}>
           <button onClick={stopAllOrSend} disabled={busy || (!hasSession)} title="Stop recording/streaming or send text (requires objective)">End / Send</button>
+          <button onClick={()=>{ try{ cancelSpeak() }catch{} }} title="Stop voice">Stop voice</button>
           {awaitingUser && <span className="muted">Waiting for your answer…</span>}
         </div>
       </div>

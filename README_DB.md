@@ -1,118 +1,96 @@
-# EQiLevel Capstone Project
+# Database Notes (Postgres)
 
-## 📖 Project Overview
-EQiLevel is an emotionally adaptive AI tutoring system that merges Reinforcement Learning (RL), Large Language Models (LLMs), and real-time sentiment detection to personalize instruction dynamically.
-Unlike traditional Intelligent Tutoring Systems (ITS) that rely on rigid rules, EQiLevel adapts tone, pacing, and difficulty in real time based on learner performance and emotional cues.
-
-### Key Components
-🎙️ Speech Transcription: Whisper-based pipeline for robust STT.  
-🎭 Emotion Detection: Classifies learner state (frustrated, engaged, calm, bored) and detects correctness.  
-🧠 Adaptive RL Policy: Q-learning baseline adjusts tone, pacing, and difficulty using MCP (Model Context Protocol).  
-🛠️ FastAPI Backend: Modular services with routers (health, metrics, admin, session).  
-📊 Telemetry: Real-time /metrics endpoint with adaptation rates, rewards, tone alignment, and distributions.  
-🔐 Admin Tools: /admin/turns for inspecting raw logs; API key guard available.  
-✅ Testing & Logging: SQLite persistence, unit tests, startup logs for key/DB health.
+This project logs tutoring turns and session metadata to Postgres. The active ORM schema (SQLAlchemy) is defined in `app/db/schema.py`.
 
 ---
 
-🏗️ Architecture  
-EQiLevel/   
-│  
-├── app/  
-│   ├── api/v1/  
-│   │   ├── health_router.py     # /api/v1/health, /api/v1/health/full  
-│   │   ├── admin_router.py      # /api/v1/admin/turns  
-│   │   └── (planned) metrics_router.py  
-│   ├── services/  
-│   │   ├── emotion.py           # normalization + correctness detection  
-│   │   ├── reward.py            # rebalanced reward shaping  
-│   │   ├── mcp.py, policy.py    # MCP builder + Q-learning updates  
-│   │   ├── tutor.py             # GPT-4o tutor integration  
-│   │   ├── storage.py           # SessionLocal, DB health, fetch_turns, logging  
-│   │   └── metrics.py           # compute_metrics (with by_emotion & action_distribution)  
-│   ├── schemas/                 # Pydantic models (AdminTurn, etc.)  
-│   └── db/schema.py             # SQLAlchemy ORM (Turn, Session)  
-│  
-├── eqilevel.db                  # SQLite log database  
-├── requirements.txt  
-└── README.md
+## Table of Contents
+
+- [Tables (current)](#tables-current)
+- [Connection & health](#connection--health)
+- [Minimal local setup](#minimal-local-setup)
+- [Extended schema (optional)](#extended-schema-optional)
 
 ---
 
-## ⚙️ Setup & Installation
-1. **Clone the repository**
-   ```bash
-   git clone <repo_url>
-   cd EQiLevel
-   ```
-2. **Create & activate virtual environment**
-   ```powershell
-   python -m venv .venv
-   .\venv\Scripts\activate    # PowerShell
-   ```
-3. **Install dependencies**
-   ```powershell
-   pip install -r requirements.txt
-   ```
-4. **Configure environment variables**
-   - Create a `.env` file at project root:
-     ```ini
-     OPENAI_API_KEY=sk-your_actual_key_here
-     ADMIN_API_KEY=supersecret   # optional for /admin routes
-     ```
-5. Run the server
-   ```powershell
-   uvicorn app.main:app --reload --port 8000
+## Tables (current)
 
----
+- users
+  - `id BIGSERIAL PRIMARY KEY`
+  - `name TEXT UNIQUE NOT NULL`
+  - `created_at TIMESTAMP DEFAULT now()`
 
-🔍 Key Endpoints  
-**Health**  
-GET /api/v1/health → lightweight liveness  
-GET /api/v1/health/full → detailed status (OpenAI key, DB health), returns 200 if ok, 503 if degraded
+- sessions
+  - `id BIGSERIAL PRIMARY KEY`
+  - `created_at TIMESTAMP DEFAULT now()`
 
-**Session Flow**  
-POST /session → full loop (analyze → MCP → RL policy → tutor → log)
+- session_users
+  - `session_id BIGINT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE`
+  - `user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE`
+  - `created_at TIMESTAMP DEFAULT now()`
 
-**Metrics**  
-GET /metrics  
-GET /metrics?session_id=s1
+- turns
+  - `id BIGSERIAL PRIMARY KEY`
+  - `session_id BIGINT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE`
+  - `user_text TEXT NOT NULL`
+  - `reply_text TEXT NOT NULL`
+  - `emotion JSON NOT NULL`
+  - `performance JSON NOT NULL` (may include `objective_code`)
+  - `mcp JSON NOT NULL`
+  - `reward DOUBLE PRECISION NOT NULL`
+  - `created_at TIMESTAMP DEFAULT now()`
 
-**Reports:**  
-```json
-{
-  "turns_total": 10,
-  "avg_reward": 0.21,
-  "frustration_adaptation_rate": 0.78,
-  "tone_alignment_rate": 0.81,
-  "last_10_reward_avg": 0.25,
-  "by_emotion": {...},
-  "action_distribution": {...}
-}
+- settings
+  - `key TEXT PRIMARY KEY`
+  - `value TEXT NOT NULL`
+
+Recommended index:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_turns_session_created
+  ON turns (session_id, created_at DESC);
 ```
 
 ---
 
-**Admin**  
-GET /api/v1/admin/turns?session_id=s1&limit=10 → inspect recent turns (user_text, emotion, mcp, reward)
+## Connection & health
 
-**📊 Telemetry & Findings**  
-RL agent adapted pacing/difficulty in 78% of frustrated cases.  
-Whisper achieved 5.3% WER in transcription accuracy.  
-Emotion classification accuracy 84%; tutor tone alignment 81%.  
-Reward baseline 0.41 (performance-only) vs 0.63 (performance + emotion).  
-/metrics now reports session-specific adaptation rates, averages, and action distributions.
+- The API reads `DATABASE_URL` from `.env` (example: `postgresql+psycopg2://eqi:eqipw@localhost:5432/eqilevel`).
+- On startup, tables are created automatically if missing.
+- A quick health checker is available at `GET /api/v1/health/full` and `tests/test_smoke_postgres.py`.
 
-**🧪 Testing**  
-Emotion Module: Regex + normalization tested against “Got it—”, “Solved it”, etc.  
-Reward Module: Validated positive shaping with engaged/correct turns.  
-SQLite: Verified correctness logging (performance.correct=True) and reward persistence.  
-curl & Swagger: Smoke-tested /session, /metrics, /admin/turns, /health/full.
+`tests/test_smoke_postgres.py` accepts SQLAlchemy-style URLs and normalizes to a psycopg2 URL for direct `psycopg2.connect(...)`.
 
-**🚀 Next Steps**  
-Extract /metrics into dedicated metrics_router.py for full modularity.  
-Add /admin/summary for compact dashboards.  
-Integrate Flowise orchestration for voice-first demo.  
-Capture screenshots/metrics graphs for Capstone Week 8–9 reports.
+---
 
-_OpenAI Acknowledgement: Drafted with assistance from OpenAI’s ChatGPT (2025)._
+## Minimal local setup
+
+```bash
+docker run -d --name eqilevel-db \
+  -e POSTGRES_USER=eqi -e POSTGRES_PASSWORD=eqipw -e POSTGRES_DB=eqilevel \
+  -p 5432:5432 postgres:16
+
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1  # PowerShell
+pip install -r requirements.txt
+
+# .env
+echo OPENAI_API_KEY=sk-...> .env
+echo DATABASE_URL=postgresql+psycopg2://eqi:eqipw@localhost:5432/eqilevel>> .env
+
+uvicorn app.main:app --reload --port 8000
+```
+
+Verify turns being logged:
+
+```bash
+docker exec -it eqilevel-db psql -U eqi -d eqilevel \
+  -c 'SELECT id, session_id, reward, created_at FROM "turns" ORDER BY id DESC LIMIT 10;'
+```
+
+---
+
+## Extended schema (optional)
+
+The file `app/db/ddl.sql` contains a richer, student-centric schema (students, objectives, events, affect logs, interventions, MCP snapshots) intended for future expansion and reporting. It is not automatically applied by the API. If you want to experiment with it, load it manually in a separate database/schema and adapt the services.
+

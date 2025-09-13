@@ -260,9 +260,15 @@ export type HealthFull = {
 }
 
 export async function getHealthFull(): Promise<HealthFull> {
+  // Return JSON payload even when server responds 503 (degraded)
   const r = await fetch(`${getApiBase()}/api/v1/health/full`)
-  if (!r.ok) throw new Error(await r.text())
-  return r.json()
+  try {
+    const j = await r.json()
+    return j as HealthFull
+  } catch {
+    if (!r.ok) throw new Error(await r.text())
+    throw new Error('health parse failed')
+  }
 }
 
 export async function validateAdminKey(): Promise<boolean> {

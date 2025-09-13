@@ -1,103 +1,103 @@
-# EQiLevel Capstone Project
+# EQiLevel PoC - Pipelines and Tests
 
-## 📖 Project Overview
-EQiLevel is an adaptive learning platform combining speech-based interaction and reinforcement learning to dynamically tailor question difficulty based on student performance and emotional cues.
-
-### Key Components
-1. **Audio Transcription (Whisper + CUDA)**
-2. **Emotion Analysis (GPT-4o prompting)**
-3. **Adaptive Q-Learning Agent**
-4. **Comprehensive Unit Tests with Console Feedback**
+This Proof-of-Concept demonstrates audio transcription, emotion analysis, and a Q-learning agent with concise unit tests and console feedback.
 
 ---
 
-## ⚙️ Setup & Installation
-1. **Clone the repository**
-   ```bash
-   git clone <repo_url>
-   cd EQiLevel
-   ```
-2. **Create & activate virtual environment**
-   ```powershell
-   python -m venv venv
-   .\venv\Scripts\activate    # PowerShell
-   ```
-3. **Install dependencies**
-   ```powershell
-   pip install -r requirements.txt
-   ```
-4. **Configure environment variables**
-   - Create a `.env` file at project root:
-     ```ini
-     OPENAI_API_KEY=sk-your_actual_key_here
-     ```
+## Table of Contents
+
+- [Setup](#setup)
+- [Audio Transcription](#audio-transcription)
+- [Emotion Analysis](#emotion-analysis)
+- [Q-Learning Agent](#q-learning-agent)
+- [Tests](#tests)
+- [Next Steps](#next-steps)
 
 ---
 
-## 🎙️ Audio Transcription Pipeline
-- **Script**: `src/audio/transcribe_to_json.py`
-- Uses FFmpeg + Whisper (GPU auto-detect)
+## Setup
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1  # PowerShell
+pip install -r requirements.txt
+
+# .env
+echo OPENAI_API_KEY=sk-...> .env
+```
+
+Requirements
+- Python 3.10+
+- FFmpeg in PATH
+- CUDA (optional) for Whisper and Torch GPU acceleration
+
+---
+
+## Audio Transcription
+
+- Script: `src/audio/transcribe_to_json.py`
+- Uses FFmpeg + Whisper; auto-detects GPU
 - Transcribes `.wav`, `.mp3`, `.m4a` to JSON with timestamps
 
-**Usage:**
+Usage
+
 ```bash
 python src/audio/transcribe_to_json.py samples/your_audio.wav
 ```
 
 ---
 
-## 🎭 Emotion Analysis Pipeline
-- **Script**: `src/nlp/emotion_prompt.py`
-- Reads transcript JSON, prompts GPT-4o, strips fences, parses JSON
+## Emotion Analysis
+
+- Script: `src/nlp/emotion_prompt.py`
+- Reads transcript JSON, prompts GPT, strips fences, parses JSON
 - Logs each step and prints a summary
 
-**Usage:**
+Usage
+
 ```bash
 python src/nlp/emotion_prompt.py transcripts/your_audio_transcript.json
 ```
 
 ---
 
-## 🤖 Q-Learning Agent
-- **Module**: `src/rl/q_learning_agent.py`
+## Q-Learning Agent
+
+- Module: `src/rl/q_learning_agent.py`
 - Implements:
-  - ε-greedy action selection
-  - Temporal-Difference (TD) update rule
-  - Console logs for init, state creation, action, and updates
-  - Save/load persistence
+  - epsilon-greedy action selection
+  - temporal-difference (TD) update
+  - structured logging for init/state/action/updates
+  - save/load of Q-table
 
 ---
 
-## 🧪 Testing Strategy
-### Emotion Module Tests
-- **File**: `tests/test_emotion_prompt.py`
-- Validates transcript loading, prompt creation, JSON parsing, output saving, with pass/fail prints
+## Tests
 
-### Q-Learning Agent Tests
-- **File**: `tests/test_q_learning_agent.py`
-- Covers state init, explore/exploit, TD updates, save/load, with detailed console feedback
+Emotion module
+- File: `tests/test_emotion_prompt.py`
+- Validates transcript loading, prompt, JSON parsing, output saving
 
-**Run all tests:**
+Q-learning agent
+- File: `tests/test_q_learning_agent.py`
+- Covers state init, explore/exploit, TD updates, save/load
+
+Run all tests
+
 ```bash
 pytest -q
 ```
 
 ---
 
-## 📜 Requirements
-- Python 3.10+
-- CUDA Toolkit 12.1 & drivers
-- FFmpeg in PATH
-- Dependencies in `requirements.txt` (update via `pip freeze > requirements.txt`)
+## Next Steps
+
+- Integrate pipelines into CLI/UI
+- Incorporate emotional feedback into reward shaping
+- Frontend for student interaction
+- Prep deployment & user study
 
 ---
 
-## 🚀 Next Steps
-- Integrate pipelines into a CLI/web interface
-- Enhance reward function with emotional feedback
-- Develop front-end for student interaction
-- Prepare Sprint 05: deployment & user study
+OpenAI acknowledgement: drafted with assistance from ChatGPT (2025).
 
----
-
-*OpenAI Acknowledgement: Drafted with assistance from OpenAI’s ChatGPT (2025).*

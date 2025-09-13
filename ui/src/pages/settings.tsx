@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { getApiBase, getAdminKey, getHealthFull, validateAdminKey, getSystemPrompt, setSystemPrompt, type HealthFull } from '../lib/api'
+import { listVoices, getTTSSettings, setTTSSetting, speak } from '../lib/tts'
 
 function useLocalStorage(key: string, initial: string = ''): [string, (v: string)=>void] {
   const [v, setV] = useState<string>(() => {
@@ -29,6 +30,13 @@ export function Settings() {
   const [showKey, setShowKey] = useState(false)
   const [sysPrompt, setSysPrompt] = useState<string>('')
   const [sysBusy, setSysBusy] = useState(false)
+  // TTS
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(()=>{ try { return localStorage.getItem('eqi_tts_enabled')==='1' } catch { return false } })
+  const [ttsVoices, setTtsVoices] = useState<SpeechSynthesisVoice[]>([])
+  const initTts = getTTSSettings()
+  const [ttsVoice, setTtsVoice] = useState<string>(initTts.voiceName || '')
+  const [ttsRate, setTtsRate] = useState<string>(String(initTts.rate || 1.0))
+  const [ttsPitch, setTtsPitch] = useState<string>(String(initTts.pitch || 1.0))
   const examplePrompt = `You are a patient, encouraging K–12 tutor.
 Follow these rules every turn:
 - Persona: warm, supportive, and precise; avoid jargon.
@@ -65,6 +73,7 @@ Output format (JSON object):
   }
 
   useEffect(() => { listDevices(false) }, [])
+  useEffect(() => { listVoices().then(setTtsVoices).catch(()=>setTtsVoices([])) }, [])
   useEffect(() => {
     // Load system prompt if we have a key; soft-fail otherwise
     const k = adminKey?.trim()
@@ -106,6 +115,10 @@ Output format (JSON object):
     try { localStorage.removeItem('eqi_vad_thresh') } catch {}
     try { localStorage.removeItem('eqi_vad_min_ms') } catch {}
     try { localStorage.removeItem('eqi_vad_sil_ms') } catch {}
+    try { localStorage.removeItem('eqi_tts_enabled') } catch {}
+    try { localStorage.removeItem('eqi_tts_voice') } catch {}
+    try { localStorage.removeItem('eqi_tts_rate') } catch {}
+    try { localStorage.removeItem('eqi_tts_pitch') } catch {}
     setHealth(null); setAdminValid(null)
   }
 
@@ -204,6 +217,36 @@ Output format (JSON object):
             Server stream timeouts: max {health.stream.max_seconds ?? '—'}s, stale-partial {health.stream.stale_partial_seconds ?? '—'}s
           </div>
         )}
+      </div>
+      <div style={{marginTop:16}}>
+        <h3 style={{margin:'6px 0'}}>Tutor Voice (Text‑to‑Speech)</h3>
+        <div className="row" style={{flexWrap:'wrap', gap:10}}>
+          <label className="muted" style={{display:'flex', alignItems:'center', gap:6}}>
+            <input type="checkbox" checked={ttsEnabled} onChange={e=>{ setTtsEnabled(e.target.checked); setTTSSetting('enabled', e.target.checked) }} />
+            Speak tutor messages
+          </label>
+          <div style={{display:'flex', flexDirection:'column', gap:4, minWidth:260}}>
+            <label style={{fontSize:12, color:'var(--muted)'}}>Voice</label>
+            <select value={ttsVoice} onChange={e=>{ setTtsVoice(e.target.value); setTTSSetting('voiceName', e.target.value) }} disabled={!ttsEnabled}>
+              <option value="">Default</option>
+              {ttsVoices.map((v,i)=> (
+                <option key={i} value={v.name}>{v.name} ({v.lang})</option>
+              ))}
+            </select>
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:4, minWidth:180}}>
+            <label style={{fontSize:12, color:'var(--muted)'}}>Rate (0.5–1.5)</label>
+            <input type="number" min="0.5" max="1.5" step="0.1" value={ttsRate} onChange={e=>{ setTtsRate(e.target.value); setTTSSetting('rate', e.target.value) }} disabled={!ttsEnabled} />
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:4, minWidth:180}}>
+            <label style={{fontSize:12, color:'var(--muted)'}}>Pitch (0–2)</label>
+            <input type="number" min="0" max="2" step="0.1" value={ttsPitch} onChange={e=>{ setTtsPitch(e.target.value); setTTSSetting('pitch', e.target.value) }} disabled={!ttsEnabled} />
+          </div>
+          <div className="row" style={{gap:8, alignItems:'flex-end'}}>
+            <button onClick={()=>{ const ok = speak('Hello! I will read tutor messages aloud.'); if (!ok) alert('TTS not supported in this browser.'); }} disabled={!ttsEnabled}>Test voice</button>
+          </div>
+        </div>
+        <div className="muted" style={{fontSize:12}}>Uses your browser’s built‑in speech synthesis (no keys required). Settings are stored locally.</div>
       </div>
       {err && <div className="error" style={{marginTop:8}}>Error: {err}</div>}
       <div className="row" style={{marginTop:8, gap:8}}>

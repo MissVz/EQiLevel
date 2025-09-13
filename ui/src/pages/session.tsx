@@ -38,7 +38,7 @@ export function Session() {
   return (
     <div className="card">
       <h2>Session</h2>
-      <p>Start a new learner session and store it locally for the Chat page.</p>
+      <p>Ready to learn? Enter your name to start your personalized session.</p>
       <div className="row">
         <input list="user-list" value={userName} onChange={e=>setUserName(e.target.value)} placeholder="Student name (optional)" style={{minWidth:260}} />
         <datalist id="user-list">
